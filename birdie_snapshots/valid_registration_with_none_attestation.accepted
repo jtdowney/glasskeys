@@ -1,0 +1,12 @@
+---
+version: 1.5.3
+title: valid registration with none attestation
+file: ./test/glasskeys/registration_test.gleam
+test_name: verify_valid_registration_none_attestation_test
+---
+Credential(
+  "test-credential-id",
+  <<4, 137, 244, 15, 69, 219, 222, 76, 68, 130, 141, 88, 230, 99, 8, 7, 228, 197, 154, 97, 234, 191, 111, 169, 116, 5, 221, 170, 51, 219, 212, 53, 58, 30, 202, 119, 228, 162, 55, 173, 91, 143, 40, 138, 124, 136, 85, 234, 188, 91, 76, 182, 210, 67, 206, 105, 249, 132, 182, 54, 169, 67, 207, 178, 43>>,
+  0,
+  False,
+)
