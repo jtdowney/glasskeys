@@ -188,7 +188,7 @@ pub fn verify_es256(
   signature: BitArray,
 ) -> Result(Nil, GlasskeysError) {
   let der_signature = ensure_der_signature(signature)
-  case crypto_verify_ecdsa_p256(message, der_signature, public_key) {
+  case verify_ecdsa_p256(message, der_signature, public_key) {
     True -> Ok(Nil)
     False -> Error(InvalidSignature)
   }
@@ -230,8 +230,8 @@ fn encode_der_integer(bytes: BitArray) -> BitArray {
   <<0x02, len, padded:bits>>
 }
 
-@external(erlang, "glasskeys_crypto_ffi", "crypto_verify_ecdsa_p256")
-fn crypto_verify_ecdsa_p256(
+@external(erlang, "glasskeys_ffi", "verify_ecdsa_p256")
+fn verify_ecdsa_p256(
   message: BitArray,
   der_signature: BitArray,
   public_key: BitArray,

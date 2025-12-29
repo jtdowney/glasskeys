@@ -1,12 +1,27 @@
--module(test_crypto_ffi).
+-module(glasskeys_ffi).
 
--export([sign_ecdsa_p256/2, load_keypair_from_pem/1]).
+-export([verify_ecdsa_p256/3, generate_keypair/0, sign_ecdsa_p256/2]).
+
+%% Verify an ECDSA P-256 signature
+%% Returns true if valid, false otherwise
+verify_ecdsa_p256(Message, DerSignature, PublicKey) ->
+    try
+        crypto:verify(ecdsa, sha256, Message, DerSignature, [PublicKey, secp256r1])
+    catch
+        _:_ -> false
+    end.
+
+%% Generate a random P-256 key pair
+%% Returns {PrivateKey, X, Y} where X and Y are the public point coordinates
+generate_keypair() ->
+    {PublicKey, PrivateKey} = crypto:generate_key(ecdh, secp256r1),
+    <<4, X:32/binary, Y:32/binary>> = PublicKey,
+    {PrivateKey, X, Y}.
 
 %% Sign a message using ES256 (ECDSA with P-256 and SHA-256)
 %% Returns the signature in raw R||S format (64 bytes)
 sign_ecdsa_p256(Message, PrivateKey) ->
     DerSig = crypto:sign(ecdsa, sha256, Message, [PrivateKey, secp256r1]),
-    %% Convert DER signature to raw R||S format
     der_to_raw(DerSig).
 
 %% Convert DER-encoded signature to raw R||S format
@@ -31,18 +46,6 @@ pad_or_trim(Bin, N) when byte_size(Bin) < N ->
 pad_or_trim(<<0, Rest/binary>>, N) when byte_size(Rest) >= N ->
     pad_or_trim(Rest, N);
 pad_or_trim(Bin, N) when byte_size(Bin) > N ->
-    %% Take the last N bytes
     Skip = byte_size(Bin) - N,
     <<_:Skip/binary, Result:N/binary>> = Bin,
     Result.
-
-%% Load a P-256 key pair from a PKCS#8 PEM file
-%% Returns {PrivateKey, PublicKeyX, PublicKeyY}
-load_keypair_from_pem(FilePath) ->
-    {ok, PemBin} = file:read_file(FilePath),
-    [PemEntry] = public_key:pem_decode(PemBin),
-    ECPrivateKey = public_key:pem_entry_decode(PemEntry),
-    PrivateKey = element(3, ECPrivateKey),
-    PublicKeyUncompressed = element(5, ECPrivateKey),
-    <<4, X:32/binary, Y:32/binary>> = PublicKeyUncompressed,
-    {PrivateKey, X, Y}.

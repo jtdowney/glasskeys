@@ -1,14 +1,12 @@
-import birdie
 import glasskeys.{
   Credential, CredentialNotAllowed, InvalidSignature, ParseError,
   PresenceRequired, SignCountRegression, VerificationMismatch,
   VerificationPreferred,
 }
 import glasskeys/authentication.{Challenge}
-import glasskeys/test_helpers.{make_client_data_json}
+import glasskeys/testing.{AuthenticatorFlags}
 import gleam/bit_array
 import gleam/crypto
-import pprint
 
 pub fn authentication_builder_test() {
   let cred_ids = [<<1, 2, 3>>, <<4, 5, 6>>]
@@ -151,11 +149,11 @@ pub fn verify_rejects_wrong_type_test() {
     )
 
   let client_data_json =
-    make_client_data_json(
-      "webauthn.create",
-      "dGVzdA",
-      "https://example.com",
-      False,
+    testing.build_client_data(
+      typ: "webauthn.create",
+      challenge: <<"test":utf8>>,
+      origin: "https://example.com",
+      cross_origin: False,
     )
 
   let result =
@@ -192,11 +190,11 @@ pub fn verify_rejects_challenge_mismatch_test() {
     )
 
   let client_data_json =
-    make_client_data_json(
-      "webauthn.get",
-      "d3Jvbmc",
-      "https://example.com",
-      False,
+    testing.build_client_data(
+      typ: "webauthn.get",
+      challenge: <<"wrong":utf8>>,
+      origin: "https://example.com",
+      cross_origin: False,
     )
 
   let result =
@@ -233,7 +231,12 @@ pub fn verify_rejects_origin_mismatch_test() {
     )
 
   let client_data_json =
-    make_client_data_json("webauthn.get", "dGVzdA", "https://evil.com", False)
+    testing.build_client_data(
+      typ: "webauthn.get",
+      challenge: <<"test":utf8>>,
+      origin: "https://evil.com",
+      cross_origin: False,
+    )
 
   let result =
     authentication.verify(
@@ -249,7 +252,7 @@ pub fn verify_rejects_origin_mismatch_test() {
 }
 
 pub fn verify_valid_authentication_test() {
-  let keypair = test_helpers.load_test_keypair()
+  let keypair = testing.generate_keypair()
 
   let assert Ok(challenge_bytes) =
     bit_array.base16_decode("0102030405060708090a0b0c0d0e0f10")
@@ -257,7 +260,7 @@ pub fn verify_valid_authentication_test() {
   let rp_id = "example.com"
   let credential_id = <<"test-credential-id":utf8>>
 
-  let public_key = bit_array.concat([<<4>>, keypair.x, keypair.y])
+  let public_key = testing.public_key(keypair)
 
   let stored_credential =
     Credential(
@@ -278,16 +281,25 @@ pub fn verify_valid_authentication_test() {
       allow_cross_origin: False,
     )
 
+  let flags = AuthenticatorFlags(user_present: True, user_verified: False)
   let auth_data =
-    test_helpers.build_authentication_auth_data(rp_id, 1, True, False)
+    testing.build_authentication_authenticator_data(
+      rp_id: rp_id,
+      flags: flags,
+      sign_count: 1,
+    )
 
   let client_data_json =
-    test_helpers.build_client_data_json_get(challenge_bytes, origin)
+    testing.build_client_data_get(
+      challenge: challenge_bytes,
+      origin: origin,
+      cross_origin: False,
+    )
 
   let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
 
-  let signature = test_helpers.sign_es256(signed_data, keypair.private_key)
+  let signature = testing.sign(keypair, signed_data)
 
   let result =
     authentication.verify(
@@ -300,20 +312,20 @@ pub fn verify_valid_authentication_test() {
     )
 
   let assert Ok(cred) = result
-
-  cred
-  |> pprint.format
-  |> birdie.snap(title: "valid authentication")
+  assert cred.id == credential_id
+  assert cred.sign_count == 1
+  assert cred.user_verified == False
+  assert cred.public_key == public_key
 }
 
 pub fn verify_rejects_invalid_signature_test() {
-  let keypair = test_helpers.load_test_keypair()
+  let keypair = testing.generate_keypair()
   let assert Ok(challenge_bytes) =
     bit_array.base16_decode("0102030405060708090a0b0c0d0e0f10")
   let origin = "https://example.com"
   let rp_id = "example.com"
   let credential_id = <<"test-credential-id":utf8>>
-  let public_key = bit_array.concat([<<4>>, keypair.x, keypair.y])
+  let public_key = testing.public_key(keypair)
 
   let stored_credential =
     Credential(
@@ -334,10 +346,19 @@ pub fn verify_rejects_invalid_signature_test() {
       allow_cross_origin: False,
     )
 
+  let flags = AuthenticatorFlags(user_present: True, user_verified: False)
   let auth_data =
-    test_helpers.build_authentication_auth_data(rp_id, 1, True, False)
+    testing.build_authentication_authenticator_data(
+      rp_id: rp_id,
+      flags: flags,
+      sign_count: 1,
+    )
   let client_data_json =
-    test_helpers.build_client_data_json_get(challenge_bytes, origin)
+    testing.build_client_data_get(
+      challenge: challenge_bytes,
+      origin: origin,
+      cross_origin: False,
+    )
 
   let invalid_signature = <<0:512>>
 
@@ -355,13 +376,13 @@ pub fn verify_rejects_invalid_signature_test() {
 }
 
 pub fn verify_rejects_sign_count_regression_test() {
-  let keypair = test_helpers.load_test_keypair()
+  let keypair = testing.generate_keypair()
   let assert Ok(challenge_bytes) =
     bit_array.base16_decode("0102030405060708090a0b0c0d0e0f10")
   let origin = "https://example.com"
   let rp_id = "example.com"
   let credential_id = <<"test-credential-id":utf8>>
-  let public_key = bit_array.concat([<<4>>, keypair.x, keypair.y])
+  let public_key = testing.public_key(keypair)
 
   let stored_credential =
     Credential(
@@ -382,13 +403,22 @@ pub fn verify_rejects_sign_count_regression_test() {
       allow_cross_origin: False,
     )
 
+  let flags = AuthenticatorFlags(user_present: True, user_verified: False)
   let auth_data =
-    test_helpers.build_authentication_auth_data(rp_id, 5, True, False)
+    testing.build_authentication_authenticator_data(
+      rp_id: rp_id,
+      flags: flags,
+      sign_count: 5,
+    )
   let client_data_json =
-    test_helpers.build_client_data_json_get(challenge_bytes, origin)
+    testing.build_client_data_get(
+      challenge: challenge_bytes,
+      origin: origin,
+      cross_origin: False,
+    )
   let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
-  let signature = test_helpers.sign_es256(signed_data, keypair.private_key)
+  let signature = testing.sign(keypair, signed_data)
 
   let result =
     authentication.verify(
@@ -404,13 +434,13 @@ pub fn verify_rejects_sign_count_regression_test() {
 }
 
 pub fn verify_rejects_sign_count_reset_to_zero_test() {
-  let keypair = test_helpers.load_test_keypair()
+  let keypair = testing.generate_keypair()
   let assert Ok(challenge_bytes) =
     bit_array.base16_decode("0102030405060708090a0b0c0d0e0f10")
   let origin = "https://example.com"
   let rp_id = "example.com"
   let credential_id = <<"test-credential-id":utf8>>
-  let public_key = bit_array.concat([<<4>>, keypair.x, keypair.y])
+  let public_key = testing.public_key(keypair)
 
   let stored_credential =
     Credential(
@@ -431,13 +461,22 @@ pub fn verify_rejects_sign_count_reset_to_zero_test() {
       allow_cross_origin: False,
     )
 
+  let flags = AuthenticatorFlags(user_present: True, user_verified: False)
   let auth_data =
-    test_helpers.build_authentication_auth_data(rp_id, 0, True, False)
+    testing.build_authentication_authenticator_data(
+      rp_id: rp_id,
+      flags: flags,
+      sign_count: 0,
+    )
   let client_data_json =
-    test_helpers.build_client_data_json_get(challenge_bytes, origin)
+    testing.build_client_data_get(
+      challenge: challenge_bytes,
+      origin: origin,
+      cross_origin: False,
+    )
   let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
-  let signature = test_helpers.sign_es256(signed_data, keypair.private_key)
+  let signature = testing.sign(keypair, signed_data)
 
   let result =
     authentication.verify(
