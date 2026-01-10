@@ -15,6 +15,9 @@ import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import kryptos/ec
+import kryptos/ecdsa
+import kryptos/hash
 
 const cose_key_kty = 1
 
@@ -188,7 +191,11 @@ pub fn verify_es256(
   signature: BitArray,
 ) -> Result(Nil, GlasskeysError) {
   let der_signature = ensure_der_signature(signature)
-  case verify_ecdsa_p256(message, der_signature, public_key) {
+  use pk <- result.try(
+    ec.public_key_from_raw_point(ec.P256, public_key)
+    |> result.replace_error(UnsupportedKey("invalid public key point")),
+  )
+  case ecdsa.verify(pk, message, signature: der_signature, hash: hash.Sha256) {
     True -> Ok(Nil)
     False -> Error(InvalidSignature)
   }
@@ -229,13 +236,6 @@ fn encode_der_integer(bytes: BitArray) -> BitArray {
   let len = bit_array.byte_size(padded)
   <<0x02, len, padded:bits>>
 }
-
-@external(erlang, "glasskeys_ffi", "verify_ecdsa_p256")
-fn verify_ecdsa_p256(
-  message: BitArray,
-  der_signature: BitArray,
-  public_key: BitArray,
-) -> Bool
 
 pub type CoseKey {
   EC2Key(algorithm: Int, curve: Int, x: BitArray, y: BitArray)

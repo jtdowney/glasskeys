@@ -39,6 +39,9 @@ import glasskeys/registration
 import gleam/bit_array
 import gleam/crypto
 import gleam/json
+import kryptos/ec
+import kryptos/ecdsa
+import kryptos/hash
 
 // ============================================================================
 // Types
@@ -47,7 +50,7 @@ import gleam/json
 /// An ES256 (P-256) key pair for testing WebAuthn flows.
 pub type KeyPair {
   KeyPair(
-    /// 32-byte private key scalar
+    /// DER-encoded private key (PKCS#8)
     private_key: BitArray,
     /// 32-byte X coordinate of public point
     x: BitArray,
@@ -98,12 +101,12 @@ pub type AuthenticationResponse {
 
 /// Generate a new random ES256 (P-256) key pair.
 pub fn generate_keypair() -> KeyPair {
-  let #(private_key, x, y) = do_generate_keypair()
-  KeyPair(private_key: private_key, x: x, y: y)
+  let #(private_key, public_key) = ec.generate_key_pair(ec.P256)
+  let assert <<4, x:bytes-size(32), y:bytes-size(32)>> =
+    ec.public_key_to_raw_point(public_key)
+  let assert Ok(der) = ec.to_der(private_key)
+  KeyPair(private_key: der, x: x, y: y)
 }
-
-@external(erlang, "glasskeys_ffi", "generate_keypair")
-fn do_generate_keypair() -> #(BitArray, BitArray, BitArray)
 
 /// Get the public key in uncompressed point format (0x04 || X || Y).
 /// This is the format stored in `Credential.public_key`.
@@ -133,11 +136,31 @@ pub fn cose_key(keypair: KeyPair) -> BitArray {
 /// Sign a message using ES256 (ECDSA with P-256 and SHA-256).
 /// Returns signature in raw R||S format (64 bytes).
 pub fn sign(keypair: KeyPair, message: BitArray) -> BitArray {
-  do_sign_ecdsa_p256(message, keypair.private_key)
+  let assert Ok(#(private_key, _)) = ec.from_der(keypair.private_key)
+  let der_sig = ecdsa.sign(private_key, message, hash.Sha256)
+  der_to_raw(der_sig)
 }
 
-@external(erlang, "glasskeys_ffi", "sign_ecdsa_p256")
-fn do_sign_ecdsa_p256(message: BitArray, private_key: BitArray) -> BitArray
+fn der_to_raw(der: BitArray) -> BitArray {
+  let assert <<0x30, _len, 0x02, r_len, rest:bytes>> = der
+  let assert <<r:bytes-size(r_len), 0x02, s_len, s:bytes-size(s_len)>> = rest
+  bit_array.concat([pad_to_32(r), pad_to_32(s)])
+}
+
+fn pad_to_32(bytes: BitArray) -> BitArray {
+  let size = bit_array.byte_size(bytes)
+  case size {
+    s if s > 32 -> {
+      let assert <<0, trimmed:bytes-size(32)>> = bytes
+      trimmed
+    }
+    s if s < 32 -> {
+      let padding = <<0:size({ { 32 - s } * 8 })>>
+      bit_array.concat([padding, bytes])
+    }
+    _ -> bytes
+  }
+}
 
 // ============================================================================
 // Flags
