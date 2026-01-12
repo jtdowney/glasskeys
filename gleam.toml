@@ -13,5 +13,5 @@ gleam_stdlib = ">= 0.67.1 and < 2.0.0"
 kryptos = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
-gleeunit = ">= 1.0.0 and < 2.0.0"
 qcheck = ">= 1.0.2 and < 2.0.0"
+unitest = ">= 1.0.0 and < 2.0.0"

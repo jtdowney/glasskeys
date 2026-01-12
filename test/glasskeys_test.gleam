@@ -3,10 +3,10 @@ import glasskeys/authentication
 import glasskeys/registration
 import gleam/bit_array
 import gleam/string
-import gleeunit
+import unitest
 
 pub fn main() -> Nil {
-  gleeunit.main()
+  unitest.main()
 }
 
 pub fn registration_challenge_builder_test() {
