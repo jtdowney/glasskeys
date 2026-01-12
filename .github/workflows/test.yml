@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         otp: ["28"]
-        gleam: ["1.13", "1.14"]
+        gleam: ["1.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
