@@ -2,12 +2,13 @@ import example/api/helpers
 import example/store/credentials
 import example/store/sessions.{RegistrationSession}
 import example/web.{type Context}
-import given
 import glasskeys/registration
 import gleam/bit_array
+import gleam/bool
 import gleam/crypto
 import gleam/dynamic/decode
 import gleam/json
+import gleam/result
 import wisp.{type Request, type Response}
 
 pub fn begin(req: Request, ctx: Context) -> Response {
@@ -18,85 +19,87 @@ pub fn begin(req: Request, ctx: Context) -> Response {
     decode.success(username)
   }
 
-  use username <- given.ok(
-    in: decode.run(json_body, decoder),
-    else_return: fn(_) {
-      helpers.json_error("Invalid request: missing username", 400)
-    },
+  let username_result = decode.run(json_body, decoder)
+  use <- bool.guard(
+    when: result.is_error(username_result),
+    return: helpers.json_error("Invalid request: missing username", 400),
+  )
+  let assert Ok(username) = username_result
+
+  let username_result = helpers.validate_username(username)
+  use <- bool.guard(
+    when: result.is_error(username_result),
+    return: helpers.json_error("Invalid username", 400),
+  )
+  let assert Ok(username) = username_result
+
+  use <- bool.guard(
+    when: credentials.user_exists(ctx.credential_store, username),
+    return: helpers.json_error("User already exists", 400),
   )
 
-  use username <- given.ok(
-    in: helpers.validate_username(username),
-    else_return: fn(_) { helpers.json_error("Invalid username", 400) },
+  let #(challenge_b64, verifier) =
+    registration.new()
+    |> registration.origin(ctx.origin)
+    |> registration.rp_id(ctx.rp_id)
+    |> registration.build()
+
+  let user_id = crypto.strong_random_bytes(32)
+  let user_id_b64 = bit_array.base64_url_encode(user_id, False)
+
+  let session_id = helpers.generate_session_id()
+  sessions.set(
+    ctx.session_store,
+    session_id,
+    RegistrationSession(username, user_id, verifier),
   )
 
-  case credentials.user_exists(ctx.credential_store, username) {
-    True -> helpers.json_error("User already exists", 400)
-    False -> {
-      let #(challenge_b64, verifier) =
-        registration.new()
-        |> registration.origin(ctx.origin)
-        |> registration.rp_id(ctx.rp_id)
-        |> registration.build()
-
-      let user_id = crypto.strong_random_bytes(32)
-      let user_id_b64 = bit_array.base64_url_encode(user_id, False)
-
-      let session_id = helpers.generate_session_id()
-      sessions.set(
-        ctx.session_store,
-        session_id,
-        RegistrationSession(username, user_id, verifier),
-      )
-
-      let response_json =
+  let response_json =
+    json.object([
+      #("session_id", json.string(session_id)),
+      #(
+        "publicKey",
         json.object([
-          #("session_id", json.string(session_id)),
+          #("challenge", json.string(challenge_b64)),
           #(
-            "publicKey",
+            "rp",
             json.object([
-              #("challenge", json.string(challenge_b64)),
-              #(
-                "rp",
-                json.object([
-                  #("name", json.string("Glasskeys Demo")),
-                  #("id", json.string(ctx.rp_id)),
-                ]),
-              ),
-              #(
-                "user",
-                json.object([
-                  #("id", json.string(user_id_b64)),
-                  #("name", json.string(username)),
-                  #("displayName", json.string(username)),
-                ]),
-              ),
-              #(
-                "pubKeyCredParams",
-                json.preprocessed_array([
-                  json.object([
-                    #("type", json.string("public-key")),
-                    #("alg", json.int(-7)),
-                  ]),
-                ]),
-              ),
-              #(
-                "authenticatorSelection",
-                json.object([
-                  #("residentKey", json.string("required")),
-                  #("requireResidentKey", json.bool(True)),
-                  #("userVerification", json.string("preferred")),
-                ]),
-              ),
-              #("timeout", json.int(60_000)),
-              #("attestation", json.string("none")),
+              #("name", json.string("Glasskeys Demo")),
+              #("id", json.string(ctx.rp_id)),
             ]),
           ),
-        ])
+          #(
+            "user",
+            json.object([
+              #("id", json.string(user_id_b64)),
+              #("name", json.string(username)),
+              #("displayName", json.string(username)),
+            ]),
+          ),
+          #(
+            "pubKeyCredParams",
+            json.preprocessed_array([
+              json.object([
+                #("type", json.string("public-key")),
+                #("alg", json.int(-7)),
+              ]),
+            ]),
+          ),
+          #(
+            "authenticatorSelection",
+            json.object([
+              #("residentKey", json.string("required")),
+              #("requireResidentKey", json.bool(True)),
+              #("userVerification", json.string("preferred")),
+            ]),
+          ),
+          #("timeout", json.int(60_000)),
+          #("attestation", json.string("none")),
+        ]),
+      ),
+    ])
 
-      wisp.json_response(json.to_string(response_json), 200)
-    }
-  }
+  wisp.json_response(json.to_string(response_json), 200)
 }
 
 pub fn complete(req: Request, ctx: Context) -> Response {
@@ -115,68 +118,79 @@ pub fn complete(req: Request, ctx: Context) -> Response {
     decode.success(#(session_id, attestation_object, client_data_json))
   }
 
-  use #(session_id, attestation_obj_b64, client_data_b64) <- given.ok(
-    in: decode.run(json_body, decoder),
-    else_return: fn(_) { helpers.json_error("Invalid request", 400) },
+  let decode_result = decode.run(json_body, decoder)
+  use <- bool.guard(
+    when: result.is_error(decode_result),
+    return: helpers.json_error("Invalid request", 400),
   )
+  let assert Ok(#(session_id, attestation_obj_b64, client_data_b64)) =
+    decode_result
 
-  use session <- given.ok(
-    in: sessions.get(ctx.session_store, session_id),
-    else_return: fn(_) { helpers.json_error("Session not found", 400) },
+  let session_result = sessions.get(ctx.session_store, session_id)
+  use <- bool.guard(
+    when: result.is_error(session_result),
+    return: helpers.json_error("Session not found", 400),
   )
+  let assert Ok(session) = session_result
   sessions.delete(ctx.session_store, session_id)
 
-  use #(username, user_id, verifier) <- require_registration_session(session)
-
-  use attestation_object <- given.ok(
-    in: bit_array.base64_url_decode(attestation_obj_b64),
-    else_return: fn(_) {
-      helpers.json_error("Invalid attestationObject encoding", 400)
-    },
+  let session_data_result = require_registration_session(session)
+  use <- bool.guard(
+    when: result.is_error(session_data_result),
+    return: helpers.json_error("Invalid session type", 400),
   )
-  use client_data_json <- given.ok(
-    in: bit_array.base64_url_decode(client_data_b64),
-    else_return: fn(_) {
-      helpers.json_error("Invalid clientDataJSON encoding", 400)
-    },
-  )
+  let assert Ok(#(username, user_id, verifier)) = session_data_result
 
-  case
+  let attestation_result = bit_array.base64_url_decode(attestation_obj_b64)
+  use <- bool.guard(
+    when: result.is_error(attestation_result),
+    return: helpers.json_error("Invalid attestationObject encoding", 400),
+  )
+  let assert Ok(attestation_object) = attestation_result
+
+  let client_data_result = bit_array.base64_url_decode(client_data_b64)
+  use <- bool.guard(
+    when: result.is_error(client_data_result),
+    return: helpers.json_error("Invalid clientDataJSON encoding", 400),
+  )
+  let assert Ok(client_data_json) = client_data_result
+
+  let verify_result =
     registration.verify(
       attestation_object: attestation_object,
       client_data_json: client_data_json,
       challenge: verifier,
     )
-  {
-    Ok(credential) -> {
-      case
-        credentials.save(ctx.credential_store, username, user_id, credential)
-      {
-        Ok(_) -> {
-          let response_json =
-            json.object([
-              #("status", json.string("ok")),
-              #(
-                "credential_id",
-                json.string(bit_array.base64_url_encode(credential.id, False)),
-              ),
-            ])
-          wisp.json_response(json.to_string(response_json), 200)
-        }
-        Error(_) -> helpers.json_error("Failed to save credential", 500)
-      }
-    }
-    Error(e) -> helpers.json_error(helpers.error_to_string(e), 400)
-  }
+  use <- bool.lazy_guard(when: result.is_error(verify_result), return: fn() {
+    let assert Error(e) = verify_result
+    helpers.json_error(helpers.error_to_string(e), 400)
+  })
+  let assert Ok(credential) = verify_result
+
+  let save_result =
+    credentials.save(ctx.credential_store, username, user_id, credential)
+  use <- bool.guard(
+    when: result.is_error(save_result),
+    return: helpers.json_error("Failed to save credential", 500),
+  )
+
+  let response_json =
+    json.object([
+      #("status", json.string("ok")),
+      #(
+        "credential_id",
+        json.string(bit_array.base64_url_encode(credential.id, False)),
+      ),
+    ])
+  wisp.json_response(json.to_string(response_json), 200)
 }
 
 fn require_registration_session(
   session: sessions.SessionData,
-  next: fn(#(String, BitArray, registration.Challenge)) -> Response,
-) -> Response {
+) -> Result(#(String, BitArray, registration.Challenge), Nil) {
   case session {
     sessions.RegistrationSession(username, user_id, verifier) ->
-      next(#(username, user_id, verifier))
-    _ -> helpers.json_error("Invalid session type", 400)
+      Ok(#(username, user_id, verifier))
+    _ -> Error(Nil)
   }
 }

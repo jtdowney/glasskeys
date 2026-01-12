@@ -3,7 +3,6 @@ version = "0.1.0"
 target = "erlang"
 
 [dependencies]
-given = ">= 6.0.0 and < 7.0.0"
 glasskeys = { path = ".." }
 gleam_crypto = ">= 1.0.0 and < 2.0.0"
 gleam_erlang = ">= 1.0.0 and < 2.0.0"

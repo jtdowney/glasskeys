@@ -2,9 +2,9 @@ import example/api/helpers
 import example/store/credentials
 import example/store/sessions.{AuthenticationSession}
 import example/web.{type Context}
-import given
 import glasskeys/authentication
 import gleam/bit_array
+import gleam/bool
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
@@ -71,61 +71,79 @@ pub fn complete(req: Request, ctx: Context) -> Response {
     ))
   }
 
-  use
-    #(
-      session_id,
-      cred_id_b64,
-      auth_data_b64,
-      client_data_b64,
-      sig_b64,
-      user_handle_b64,
-    )
-  <- given.ok(in: decode.run(json_body, decoder), else_return: fn(_) {
-    helpers.json_error("Invalid request", 400)
-  })
-
-  use session <- given.ok(
-    in: sessions.get(ctx.session_store, session_id),
-    else_return: fn(_) { helpers.json_error("Session not found", 400) },
+  let decode_result = decode.run(json_body, decoder)
+  use <- bool.guard(
+    when: result.is_error(decode_result),
+    return: helpers.json_error("Invalid request", 400),
   )
+  let assert Ok(#(
+    session_id,
+    cred_id_b64,
+    auth_data_b64,
+    client_data_b64,
+    sig_b64,
+    user_handle_b64,
+  )) = decode_result
+
+  let session_result = sessions.get(ctx.session_store, session_id)
+  use <- bool.guard(
+    when: result.is_error(session_result),
+    return: helpers.json_error("Session not found", 400),
+  )
+  let assert Ok(session) = session_result
   sessions.delete(ctx.session_store, session_id)
 
-  use verifier <- require_auth_session(session)
+  let verifier_result = require_auth_session(session)
+  use <- bool.guard(
+    when: result.is_error(verifier_result),
+    return: helpers.json_error("Invalid session type", 400),
+  )
+  let assert Ok(verifier) = verifier_result
 
-  use credential_id <- given.ok(
-    in: bit_array.base64_url_decode(cred_id_b64),
-    else_return: fn(_) {
-      helpers.json_error("Invalid credential_id encoding", 400)
-    },
+  let cred_id_result = bit_array.base64_url_decode(cred_id_b64)
+  use <- bool.guard(
+    when: result.is_error(cred_id_result),
+    return: helpers.json_error("Invalid credential_id encoding", 400),
   )
-  use authenticator_data <- given.ok(
-    in: bit_array.base64_url_decode(auth_data_b64),
-    else_return: fn(_) {
-      helpers.json_error("Invalid authenticatorData encoding", 400)
-    },
-  )
-  use client_data_json <- given.ok(
-    in: bit_array.base64_url_decode(client_data_b64),
-    else_return: fn(_) {
-      helpers.json_error("Invalid clientDataJSON encoding", 400)
-    },
-  )
-  use signature <- given.ok(
-    in: bit_array.base64_url_decode(sig_b64),
-    else_return: fn(_) { helpers.json_error("Invalid signature encoding", 400) },
-  )
+  let assert Ok(credential_id) = cred_id_result
 
-  use user <- given.ok(
-    in: find_user(ctx, credential_id, user_handle_b64),
-    else_return: fn(_) { helpers.json_error("User not found", 400) },
+  let auth_data_result = bit_array.base64_url_decode(auth_data_b64)
+  use <- bool.guard(
+    when: result.is_error(auth_data_result),
+    return: helpers.json_error("Invalid authenticatorData encoding", 400),
   )
+  let assert Ok(authenticator_data) = auth_data_result
 
-  use stored_cred <- given.ok(
-    in: list.find(user.credentials, fn(c) { c.id == credential_id }),
-    else_return: fn(_) { helpers.json_error("Credential not found", 400) },
+  let client_data_result = bit_array.base64_url_decode(client_data_b64)
+  use <- bool.guard(
+    when: result.is_error(client_data_result),
+    return: helpers.json_error("Invalid clientDataJSON encoding", 400),
   )
+  let assert Ok(client_data_json) = client_data_result
 
-  case
+  let sig_result = bit_array.base64_url_decode(sig_b64)
+  use <- bool.guard(
+    when: result.is_error(sig_result),
+    return: helpers.json_error("Invalid signature encoding", 400),
+  )
+  let assert Ok(signature) = sig_result
+
+  let user_result = find_user(ctx, credential_id, user_handle_b64)
+  use <- bool.guard(
+    when: result.is_error(user_result),
+    return: helpers.json_error("User not found", 400),
+  )
+  let assert Ok(user) = user_result
+
+  let stored_cred_result =
+    list.find(user.credentials, fn(c) { c.id == credential_id })
+  use <- bool.guard(
+    when: result.is_error(stored_cred_result),
+    return: helpers.json_error("Credential not found", 400),
+  )
+  let assert Ok(stored_cred) = stored_cred_result
+
+  let verify_result =
     authentication.verify(
       authenticator_data: authenticator_data,
       client_data_json: client_data_json,
@@ -134,24 +152,21 @@ pub fn complete(req: Request, ctx: Context) -> Response {
       challenge: verifier,
       stored: stored_cred,
     )
-  {
-    Ok(updated_credential) -> {
-      case
-        credentials.update(
-          ctx.credential_store,
-          user.username,
-          updated_credential,
-        )
-      {
-        Ok(_) -> {
-          wisp.redirect("/welcome")
-          |> web.set_session_cookie(req, user.username)
-        }
-        Error(_) -> helpers.json_error("Failed to update credential", 500)
-      }
-    }
-    Error(e) -> helpers.json_error(helpers.error_to_string(e), 400)
-  }
+  use <- bool.lazy_guard(when: result.is_error(verify_result), return: fn() {
+    let assert Error(e) = verify_result
+    helpers.json_error(helpers.error_to_string(e), 400)
+  })
+  let assert Ok(updated_credential) = verify_result
+
+  let update_result =
+    credentials.update(ctx.credential_store, user.username, updated_credential)
+  use <- bool.guard(
+    when: result.is_error(update_result),
+    return: helpers.json_error("Failed to update credential", 500),
+  )
+
+  wisp.redirect("/welcome")
+  |> web.set_session_cookie(req, user.username)
 }
 
 fn find_user(
@@ -178,10 +193,9 @@ fn find_user(
 
 fn require_auth_session(
   session: sessions.SessionData,
-  next: fn(authentication.Challenge) -> Response,
-) -> Response {
+) -> Result(authentication.Challenge, Nil) {
   case session {
-    sessions.AuthenticationSession(verifier) -> next(verifier)
-    _ -> helpers.json_error("Invalid session type", 400)
+    sessions.AuthenticationSession(verifier) -> Ok(verifier)
+    _ -> Error(Nil)
   }
 }
