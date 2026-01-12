@@ -38,10 +38,11 @@ import glasskeys.{
 import glasskeys/internal
 import gleam/bit_array
 import gleam/bool
-import gleam/crypto
 import gleam/list
 import gleam/option
 import gleam/result
+import kryptos/crypto
+import kryptos/hash
 
 /// Builder for configuring a WebAuthn authentication challenge.
 ///
@@ -82,7 +83,7 @@ pub type Challenge {
 /// Origin and rp_id must be set before calling build().
 pub fn new() -> Builder(Missing, Missing) {
   Builder(
-    bytes: crypto.strong_random_bytes(32),
+    bytes: crypto.random_bytes(32),
     origin: "",
     rp_id: "",
     allowed_credentials: [],
@@ -308,7 +309,7 @@ pub fn verify(
     return: Error(VerificationMismatch("cross_origin")),
   )
 
-  let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
+  let assert Ok(client_data_hash) = crypto.hash(hash.Sha256, client_data_json)
 
   use auth_data <- result.try(internal.parse_authenticator_data(
     authenticator_data,
@@ -319,8 +320,8 @@ pub fn verify(
     return: Error(ParseError("AT flag should not be set in authentication")),
   )
 
-  let expected_rp_id_hash =
-    crypto.hash(crypto.Sha256, bit_array.from_string(challenge.rp_id))
+  let assert Ok(expected_rp_id_hash) =
+    crypto.hash(hash.Sha256, bit_array.from_string(challenge.rp_id))
   use <- bool.guard(
     when: auth_data.rp_id_hash != expected_rp_id_hash,
     return: Error(VerificationMismatch("rp_id")),

@@ -37,8 +37,8 @@ import glasskeys.{type Credential, type CredentialId, type PublicKey}
 import glasskeys/authentication
 import glasskeys/registration
 import gleam/bit_array
-import gleam/crypto
 import gleam/json
+import kryptos/crypto
 import kryptos/ec
 import kryptos/ecdsa
 import kryptos/hash
@@ -183,7 +183,7 @@ pub fn build_registration_response(
   challenge challenge: registration.Challenge,
 ) -> RegistrationResponse {
   let keypair = generate_keypair()
-  let credential_id = crypto.strong_random_bytes(32)
+  let credential_id = crypto.random_bytes(32)
   let cose = cose_key(keypair)
   let flags = default_flags()
 
@@ -237,7 +237,7 @@ pub fn build_authentication_response(
       cross_origin: False,
     )
 
-  let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
+  let assert Ok(client_data_hash) = crypto.hash(hash.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
   let signature = sign(keypair, signed_data)
 
@@ -321,7 +321,8 @@ pub fn build_registration_authenticator_data(
   flags flags: AuthenticatorFlags,
   sign_count sign_count: Int,
 ) -> BitArray {
-  let rp_id_hash = crypto.hash(crypto.Sha256, bit_array.from_string(rp_id))
+  let assert Ok(rp_id_hash) =
+    crypto.hash(hash.Sha256, bit_array.from_string(rp_id))
   let flags_byte = encode_flags(flags, True)
   let aaguid = <<0:128>>
   let cred_id_len = bit_array.byte_size(credential_id)
@@ -343,7 +344,8 @@ pub fn build_authentication_authenticator_data(
   flags flags: AuthenticatorFlags,
   sign_count sign_count: Int,
 ) -> BitArray {
-  let rp_id_hash = crypto.hash(crypto.Sha256, bit_array.from_string(rp_id))
+  let assert Ok(rp_id_hash) =
+    crypto.hash(hash.Sha256, bit_array.from_string(rp_id))
   let flags_byte = encode_flags(flags, False)
 
   bit_array.concat([rp_id_hash, <<flags_byte>>, <<sign_count:size(32)>>])

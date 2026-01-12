@@ -6,7 +6,8 @@ import glasskeys.{
 import glasskeys/authentication.{Challenge}
 import glasskeys/testing.{AuthenticatorFlags}
 import gleam/bit_array
-import gleam/crypto
+import kryptos/crypto
+import kryptos/hash
 
 pub fn authentication_builder_test() {
   let cred_ids = [<<1, 2, 3>>, <<4, 5, 6>>]
@@ -296,7 +297,7 @@ pub fn verify_valid_authentication_test() {
       cross_origin: False,
     )
 
-  let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
+  let assert Ok(client_data_hash) = crypto.hash(hash.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
 
   let signature = testing.sign(keypair, signed_data)
@@ -416,7 +417,7 @@ pub fn verify_rejects_sign_count_regression_test() {
       origin: origin,
       cross_origin: False,
     )
-  let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
+  let assert Ok(client_data_hash) = crypto.hash(hash.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
   let signature = testing.sign(keypair, signed_data)
 
@@ -474,7 +475,7 @@ pub fn verify_rejects_sign_count_reset_to_zero_test() {
       origin: origin,
       cross_origin: False,
     )
-  let client_data_hash = crypto.hash(crypto.Sha256, client_data_json)
+  let assert Ok(client_data_hash) = crypto.hash(hash.Sha256, client_data_json)
   let signed_data = bit_array.concat([auth_data, client_data_hash])
   let signature = testing.sign(keypair, signed_data)
 
