@@ -94,7 +94,7 @@ pub fn begin(req: Request, ctx: Context) -> Response {
           ),
         ])
 
-      wisp.json_response(json.to_string_tree(response_json), 200)
+      wisp.json_response(json.to_string(response_json), 200)
     }
   }
 }
@@ -161,7 +161,7 @@ pub fn complete(req: Request, ctx: Context) -> Response {
                 json.string(bit_array.base64_url_encode(credential.id, False)),
               ),
             ])
-          wisp.json_response(json.to_string_tree(response_json), 200)
+          wisp.json_response(json.to_string(response_json), 200)
         }
         Error(_) -> helpers.json_error("Failed to save credential", 500)
       }

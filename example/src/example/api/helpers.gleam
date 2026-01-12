@@ -12,7 +12,7 @@ pub fn generate_session_id() -> String {
 
 pub fn json_error(message: String, status: Int) -> Response {
   let body = json.object([#("error", json.string(message))])
-  wisp.json_response(json.to_string_tree(body), status)
+  wisp.json_response(json.to_string(body), status)
 }
 
 pub fn error_to_string(error: glasskeys.GlasskeysError) -> String {

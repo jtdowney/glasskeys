@@ -36,7 +36,7 @@ pub fn begin(_req: Request, ctx: Context) -> Response {
       ),
     ])
 
-  wisp.json_response(json.to_string_tree(response_json), 200)
+  wisp.json_response(json.to_string(response_json), 200)
 }
 
 pub fn complete(req: Request, ctx: Context) -> Response {
