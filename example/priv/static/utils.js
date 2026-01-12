@@ -1,26 +1,9 @@
 function base64UrlEncode(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let str = '';
-  for (const byte of bytes) {
-    str += String.fromCharCode(byte);
-  }
-  return btoa(str)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return new Uint8Array(buffer).toBase64({ alphabet: 'base64url', omitPadding: true });
 }
 
 function base64UrlDecode(str) {
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (str.length % 4) {
-    str += '=';
-  }
-  const binary = atob(str);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
+  return Uint8Array.fromBase64(str, { alphabet: 'base64url' }).buffer;
 }
 
 function checkWebAuthn() {
