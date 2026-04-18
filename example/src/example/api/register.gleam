@@ -45,7 +45,11 @@ pub fn begin(req: Request, ctx: Context) -> Response {
     registration.Options(
       ..defaults,
       rp: registration.Rp(id: ctx.rp_id, name: "Glasskeys Demo"),
-      user: registration.User(id: user_id, name: username, display_name: username),
+      user: registration.User(
+        id: user_id,
+        name: username,
+        display_name: username,
+      ),
       origin: ctx.origin,
       resident_key: registration.ResidentKeyRequired,
     )
