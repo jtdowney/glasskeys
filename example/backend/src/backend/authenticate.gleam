@@ -12,12 +12,12 @@ import gleam/option
 import gleam/result
 import wisp
 
-pub fn begin(_req: wisp.Request, ctx: web.Context) -> wisp.Response {
+pub fn begin(ctx: web.Context) -> wisp.Response {
   let options =
     authentication.Options(
       ..authentication.default_options(),
       rp_id: ctx.rp_id,
-      origin: ctx.origin,
+      origins: ctx.origins,
       allow_credentials: [],
     )
   let #(options_json, challenge) = authentication.generate_options(options)

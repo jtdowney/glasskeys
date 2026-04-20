@@ -152,15 +152,8 @@ pub fn update(
   let glasslock.CredentialId(raw_id) = credential.id
   use user <- result.try(get_user_by_credential_id(store, raw_id))
 
-  let updated_credentials =
-    list.map(user.credentials, fn(cred) {
-      case cred.id == credential.id {
-        True -> credential
-        False -> cred
-      }
-    })
-
-  let updated_user = User(..user, credentials: updated_credentials)
+  let updated_user =
+    User(..user, credentials: replace_credential(user.credentials, credential))
   trove.put_in(
     store.db,
     keyspace: store.users,
@@ -168,6 +161,18 @@ pub fn update(
     value: updated_user,
   )
   Ok(Nil)
+}
+
+fn replace_credential(
+  credentials: List(glasslock.Credential),
+  updated: glasslock.Credential,
+) -> List(glasslock.Credential) {
+  list.map(credentials, fn(cred) {
+    case cred.id == updated.id {
+      True -> updated
+      False -> cred
+    }
+  })
 }
 
 fn term_codec() -> codec.Codec(a) {

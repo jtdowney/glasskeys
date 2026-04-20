@@ -21,15 +21,17 @@ gleam add glasslock
 gleam add glasskey
 ```
 
-## Example App
+## Example Apps
 
-The `example/` directory contains a working demo:
+The `example/` directory contains a shared Wisp/Mist backend (using glasslock) and two interchangeable frontends that talk to it:
 
-- `example/backend/`: Wisp/Mist JSON API server using glasslock
-- `example/frontend/`: Lustre SPA using glasskey
+- `example/backend/` - Wisp/Mist server (port 3000) that accepts requests from either frontend.
+- `example/frontends/lustre/` - Lustre using glasskey.
+- `example/frontends/svelte/` - SvelteKit using `@simplewebauthn/browser`.
 
 ```sh
-just example  # Run both the frontend and the backend
+just example-lustre  # Run the Lustre-based demo
+just example-svelte  # Run the Svelte/SimpleWebAuthn demo
 ```
 
 ## Supported Features

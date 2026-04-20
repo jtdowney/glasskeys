@@ -18,8 +18,8 @@ pub fn main() {
       sessions: session_store,
       credentials: credential_store,
       rp_id: "localhost",
-      rp_name: "GlassLock Example",
-      origin: "http://localhost:1234",
+      rp_name: "Glasslock Example",
+      origins: ["http://localhost:1234", "http://localhost:5173"],
     )
 
   let handler = router.handle_request(_, ctx)

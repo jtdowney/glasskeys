@@ -67,12 +67,12 @@ jobs:
       - run: gleam build
       - run: gleam format --check src
 
-  example-frontend:
-    name: example/frontend
+  example-frontend-lustre:
+    name: example/frontends/lustre
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: example/frontend
+        working-directory: example/frontends/lustre
     steps:
       - uses: actions/checkout@v6
       - uses: erlef/setup-beam@v1
@@ -83,3 +83,16 @@ jobs:
       - run: gleam deps download
       - run: gleam build
       - run: gleam format --check src
+
+  example-frontend-svelte:
+    name: example/frontends/svelte
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example/frontends/svelte
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
+      - run: bun run build

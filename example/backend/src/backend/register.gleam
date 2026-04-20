@@ -62,7 +62,7 @@ fn begin_registration(username: String, ctx: web.Context) -> wisp.Response {
             name: username,
             display_name: username,
           ),
-          origin: ctx.origin,
+          origins: ctx.origins,
           resident_key: registration.ResidentKeyRequired,
         )
       let #(options_json, challenge) = registration.generate_options(options)
