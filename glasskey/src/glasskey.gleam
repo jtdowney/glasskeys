@@ -463,7 +463,7 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
   )
   use algorithms <- decode.field(
     "pubKeyCredParams",
-    decode.list(decode.field("alg", algorithm_decoder(), decode.success)),
+    decode.list(pub_key_cred_param_decoder()),
   )
   use timeout <- decode.optional_field(
     "timeout",
@@ -507,6 +507,11 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
     authenticator_attachment:,
     exclude_credentials:,
   ))
+}
+
+fn pub_key_cred_param_decoder() -> decode.Decoder(Algorithm) {
+  use alg <- decode.field("alg", algorithm_decoder())
+  decode.success(alg)
 }
 
 fn algorithm_decoder() -> decode.Decoder(Algorithm) {
@@ -567,7 +572,10 @@ fn base64url_decoder() -> decode.Decoder(BitArray) {
 }
 
 fn credential_id_list_decoder() -> decode.Decoder(List(BitArray)) {
-  decode.list(decode.field("id", base64url_decoder(), decode.success))
+  decode.list({
+    use id <- decode.field("id", base64url_decoder())
+    decode.success(id)
+  })
 }
 
 fn requirement_decoder() -> decode.Decoder(Requirement) {

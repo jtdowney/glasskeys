@@ -18,7 +18,7 @@ pub fn generate_options_emits_core_fields_test() {
         name: "testuser",
         display_name: "Test User",
       ),
-      origin: "https://example.com",
+      origins: ["https://example.com"],
     )
 
   let #(options_json, challenge) = registration.generate_options(options)
@@ -40,7 +40,7 @@ pub fn generate_options_emits_core_fields_test() {
   assert attestation == "none"
   assert timeout == 60_000
 
-  assert registration.challenge_origin(challenge) == "https://example.com"
+  assert registration.challenge_origins(challenge) == ["https://example.com"]
   assert registration.challenge_rp_id(challenge) == "example.com"
   assert bit_array.byte_size(registration.challenge_bytes(challenge)) == 32
 }
@@ -200,7 +200,7 @@ pub fn verify_rejects_wrong_type_test() {
     testing.build_client_data(
       type_: "webauthn.get",
       challenge: registration.challenge_bytes(challenge),
-      origin: registration.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
       top_origin: option.None,
     )
@@ -223,7 +223,7 @@ pub fn verify_rejects_challenge_mismatch_test() {
   let wrong_challenge_client_data =
     testing.build_client_data_create(
       challenge: <<9, 9, 9, 9>>,
-      origin: registration.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   let response_json =
@@ -318,7 +318,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
   let client_data_json =
     testing.build_client_data_create(
       challenge: registration.challenge_bytes(challenge),
-      origin: registration.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   let response_json =
@@ -340,7 +340,7 @@ pub fn verify_rejects_cross_origin_when_disabled_test() {
   let cross_origin_client_data =
     testing.build_client_data_create(
       challenge: registration.challenge_bytes(challenge),
-      origin: registration.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: True,
     )
   let response_json =
@@ -369,7 +369,7 @@ pub fn verify_succeeds_with_cross_origin_allowed_test() {
   let cross_origin_client_data =
     testing.build_client_data_create(
       challenge: registration.challenge_bytes(challenge),
-      origin: registration.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: True,
     )
   let response_json =
@@ -408,7 +408,7 @@ fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
       name: "testuser",
       display_name: "Test User",
     ),
-    origin: "https://example.com",
+    origins: ["https://example.com"],
     user_verification: uv,
   )
 }
@@ -441,7 +441,7 @@ fn manually_built_response(
   let client_data_json =
     testing.build_client_data_create(
       challenge: registration.challenge_bytes(challenge),
-      origin: registration.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   testing.to_registration_json_with(

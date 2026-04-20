@@ -14,7 +14,7 @@ pub fn generate_options_emits_core_fields_test() {
     authentication.Options(
       ..authentication.default_options(),
       rp_id: "example.com",
-      origin: "https://example.com",
+      origins: ["https://example.com"],
     )
 
   let #(options_json, challenge) = authentication.generate_options(options)
@@ -32,7 +32,7 @@ pub fn generate_options_emits_core_fields_test() {
   assert timeout == 60_000
   assert uv == "preferred"
 
-  assert authentication.challenge_origin(challenge) == "https://example.com"
+  assert authentication.challenge_origins(challenge) == ["https://example.com"]
   assert authentication.challenge_rp_id(challenge) == "example.com"
   assert bit_array.byte_size(authentication.challenge_bytes(challenge)) == 32
 }
@@ -42,7 +42,7 @@ pub fn generate_options_produces_unique_challenges_test() {
     authentication.Options(
       ..authentication.default_options(),
       rp_id: "example.com",
-      origin: "https://example.com",
+      origins: ["https://example.com"],
     )
 
   let #(_, challenge1) = authentication.generate_options(options)
@@ -58,7 +58,7 @@ pub fn generate_options_with_allow_credentials_test() {
     authentication.Options(
       ..authentication.default_options(),
       rp_id: "example.com",
-      origin: "https://example.com",
+      origins: ["https://example.com"],
       allow_credentials: [
         glasslock.CredentialId(cred1),
         glasslock.CredentialId(cred2),
@@ -101,7 +101,7 @@ pub fn generate_options_user_verification_variants_test() {
       authentication.Options(
         ..authentication.default_options(),
         rp_id: "example.com",
-        origin: "https://example.com",
+        origins: ["https://example.com"],
         user_verification: variant,
       )
 
@@ -174,7 +174,7 @@ pub fn verify_rejects_wrong_type_test() {
     testing.build_client_data(
       type_: "webauthn.create",
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
       top_origin: option.None,
     )
@@ -198,7 +198,7 @@ pub fn verify_rejects_challenge_mismatch_test() {
   let wrong_challenge_client_data =
     testing.build_client_data_get(
       challenge: <<9, 9, 9, 9>>,
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   let response_json =
@@ -427,7 +427,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
   let client_data_json =
     testing.build_client_data_get(
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   let signature =
@@ -464,7 +464,7 @@ pub fn verify_rejects_at_flag_in_authentication_test() {
   let client_data_json =
     testing.build_client_data_get(
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   let signature =
@@ -495,7 +495,7 @@ pub fn verify_rejects_cross_origin_when_disabled_test() {
   let cross_origin_client_data =
     testing.build_client_data_get(
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: True,
     )
   let response_json =
@@ -522,7 +522,7 @@ pub fn verify_succeeds_with_cross_origin_allowed_test() {
   let cross_origin_client_data =
     testing.build_client_data_get(
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: True,
     )
   let response_json =
@@ -632,7 +632,9 @@ pub fn parse_response_extracts_credential_info_test() {
     response_envelope(
       credential_id:,
       credential_type: "public-key",
-      user_handle: option.Some(user_handle),
+      user_handle: option.Some(
+        json.string(bit_array.base64_url_encode(user_handle, False)),
+      ),
     )
 
   let assert Ok(info) = authentication.parse_response(response_json)
@@ -641,31 +643,6 @@ pub fn parse_response_extracts_credential_info_test() {
 }
 
 pub fn parse_response_handles_missing_user_handle_test() {
-  let credential_id = <<1, 2, 3, 4, 5, 6, 7, 8>>
-
-  let response_json =
-    json.object([
-      #("id", json.string(bit_array.base64_url_encode(credential_id, False))),
-      #("rawId", json.string(bit_array.base64_url_encode(credential_id, False))),
-      #("type", json.string("public-key")),
-      #(
-        "response",
-        json.object([
-          #("clientDataJSON", json.string("dGVzdA")),
-          #("authenticatorData", json.string("dGVzdA")),
-          #("signature", json.string("dGVzdA")),
-          // userHandle intentionally omitted
-        ]),
-      ),
-      #("clientExtensionResults", json.object([])),
-    ])
-    |> json.to_string
-
-  let assert Ok(info) = authentication.parse_response(response_json)
-  assert info.user_handle == option.None
-}
-
-pub fn parse_response_handles_null_user_handle_test() {
   let credential_id = <<1, 2, 3, 4, 5, 6, 7, 8>>
 
   let response_json =
@@ -679,26 +656,29 @@ pub fn parse_response_handles_null_user_handle_test() {
   assert info.user_handle == option.None
 }
 
+pub fn parse_response_handles_null_user_handle_test() {
+  let credential_id = <<1, 2, 3, 4, 5, 6, 7, 8>>
+
+  let response_json =
+    response_envelope(
+      credential_id:,
+      credential_type: "public-key",
+      user_handle: option.Some(json.null()),
+    )
+
+  let assert Ok(info) = authentication.parse_response(response_json)
+  assert info.user_handle == option.None
+}
+
 pub fn parse_response_errors_on_invalid_user_handle_base64_test() {
   let credential_id = <<1, 2, 3, 4, 5, 6, 7, 8>>
 
   let response_json =
-    json.object([
-      #("id", json.string(bit_array.base64_url_encode(credential_id, False))),
-      #("rawId", json.string(bit_array.base64_url_encode(credential_id, False))),
-      #("type", json.string("public-key")),
-      #(
-        "response",
-        json.object([
-          #("clientDataJSON", json.string("dGVzdA")),
-          #("authenticatorData", json.string("dGVzdA")),
-          #("signature", json.string("dGVzdA")),
-          #("userHandle", json.string("!!!invalid-base64!!!")),
-        ]),
-      ),
-      #("clientExtensionResults", json.object([])),
-    ])
-    |> json.to_string
+    response_envelope(
+      credential_id:,
+      credential_type: "public-key",
+      user_handle: option.Some(json.string("!!!invalid-base64!!!")),
+    )
 
   assert authentication.parse_response(response_json)
     == Error(glasslock.ParseError("Invalid base64url in userHandle"))
@@ -756,7 +736,7 @@ fn setup_authentication_with(
     authentication.Options(
       ..authentication.default_options(),
       rp_id: "example.com",
-      origin: "https://example.com",
+      origins: ["https://example.com"],
       allow_credentials:,
       user_verification: config.user_verification,
       allow_cross_origin: config.allow_cross_origin,
@@ -810,7 +790,7 @@ fn signed_response_with_flags(
   let client_data_json =
     testing.build_client_data_get(
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin: "https://example.com",
       cross_origin: False,
     )
   let signature =
@@ -832,26 +812,22 @@ fn signed_response_with_flags(
 fn response_envelope(
   credential_id credential_id: BitArray,
   credential_type credential_type: String,
-  user_handle user_handle: option.Option(BitArray),
+  user_handle user_handle: option.Option(json.Json),
 ) -> String {
-  let user_handle_json = case user_handle {
-    option.Some(handle) ->
-      json.string(bit_array.base64_url_encode(handle, False))
-    option.None -> json.null()
+  let base_response_fields = [
+    #("clientDataJSON", json.string("dGVzdA")),
+    #("authenticatorData", json.string("dGVzdA")),
+    #("signature", json.string("dGVzdA")),
+  ]
+  let response_fields = case user_handle {
+    option.None -> base_response_fields
+    option.Some(value) -> [#("userHandle", value), ..base_response_fields]
   }
   json.object([
     #("id", json.string(bit_array.base64_url_encode(credential_id, False))),
     #("rawId", json.string(bit_array.base64_url_encode(credential_id, False))),
     #("type", json.string(credential_type)),
-    #(
-      "response",
-      json.object([
-        #("clientDataJSON", json.string("dGVzdA")),
-        #("authenticatorData", json.string("dGVzdA")),
-        #("signature", json.string("dGVzdA")),
-        #("userHandle", user_handle_json),
-      ]),
-    ),
+    #("response", json.object(response_fields)),
     #("clientExtensionResults", json.object([])),
   ])
   |> json.to_string

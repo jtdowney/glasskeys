@@ -1,3 +1,6 @@
+//// Minimal CBOR codec: ints, bytes, strings, maps. Covers only the
+//// subset WebAuthn attestation and COSE keys need.
+
 import glasslock
 import gleam/bit_array
 import gleam/int

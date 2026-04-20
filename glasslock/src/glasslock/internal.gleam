@@ -10,6 +10,7 @@ import gleam/json
 import gleam/list
 import gleam/option.{type Option}
 import gleam/result
+import gleam/set.{type Set}
 import gose
 import gose/cose
 import kryptos/crypto
@@ -47,7 +48,7 @@ pub type AuthenticationAuthData {
 pub type ChallengeData {
   ChallengeData(
     bytes: BitArray,
-    origin: String,
+    origins: Set(String),
     rp_id: String,
     user_verification: glasslock.UserVerification,
     user_presence: glasslock.UserPresence,
@@ -84,6 +85,15 @@ type AuthenticatorFlags {
     user_verified: Bool,
     has_attested_credential: Bool,
     has_extensions: Bool,
+  )
+}
+
+type AuthenticatorHeader {
+  AuthenticatorHeader(
+    rp_id_hash: BitArray,
+    flags: AuthenticatorFlags,
+    sign_count: Int,
+    rest: BitArray,
   )
 }
 
@@ -166,29 +176,27 @@ fn get_cbor_string(
 pub fn parse_authentication_auth_data(
   data: BitArray,
 ) -> Result(AuthenticationAuthData, glasslock.Error) {
-  use #(rp_id_hash, flags, sign_count, rest) <- result.try(
-    parse_authenticator_header(data),
-  )
+  use header <- result.try(parse_authenticator_header(data))
 
   use <- bool.guard(
-    when: flags.has_attested_credential,
+    when: header.flags.has_attested_credential,
     return: Error(glasslock.ParseError(
       "AT flag should not be set in authentication",
     )),
   )
 
   use <- bool.guard(
-    when: !flags.has_extensions && bit_array.byte_size(rest) > 0,
+    when: !header.flags.has_extensions && bit_array.byte_size(header.rest) > 0,
     return: Error(glasslock.ParseError(
       "Unexpected trailing bytes in authenticator data",
     )),
   )
 
   Ok(AuthenticationAuthData(
-    rp_id_hash:,
-    user_present: flags.user_present,
-    user_verified: flags.user_verified,
-    sign_count:,
+    rp_id_hash: header.rp_id_hash,
+    user_present: header.flags.user_present,
+    user_verified: header.flags.user_verified,
+    sign_count: header.sign_count,
   ))
 }
 
@@ -196,22 +204,20 @@ pub fn parse_authentication_auth_data(
 pub fn parse_registration_auth_data(
   data: BitArray,
 ) -> Result(RegistrationAuthData, glasslock.Error) {
-  use #(rp_id_hash, flags, sign_count, rest) <- result.try(
-    parse_authenticator_header(data),
-  )
+  use header <- result.try(parse_authenticator_header(data))
 
   use <- bool.guard(
-    when: !flags.has_attested_credential,
+    when: !header.flags.has_attested_credential,
     return: Error(glasslock.ParseError("No attested credential in registration")),
   )
 
-  parse_attested_credential(rest, flags.has_extensions)
+  parse_attested_credential(header.rest, header.flags.has_extensions)
   |> result.map(fn(credential) {
     RegistrationAuthData(
-      rp_id_hash:,
-      user_present: flags.user_present,
-      user_verified: flags.user_verified,
-      sign_count:,
+      rp_id_hash: header.rp_id_hash,
+      user_present: header.flags.user_present,
+      user_verified: header.flags.user_verified,
+      sign_count: header.sign_count,
       attested_credential: credential,
     )
   })
@@ -243,14 +249,20 @@ fn parse_attested_credential(
 
 fn parse_authenticator_header(
   data: BitArray,
-) -> Result(#(BitArray, AuthenticatorFlags, Int, BitArray), glasslock.Error) {
+) -> Result(AuthenticatorHeader, glasslock.Error) {
   case data {
     <<
       rp_id_hash:bytes-size(32),
       flags_byte:8,
       sign_count:32-big-unsigned,
       rest:bytes,
-    >> -> Ok(#(rp_id_hash, parse_flags(flags_byte), sign_count, rest))
+    >> ->
+      Ok(AuthenticatorHeader(
+        rp_id_hash:,
+        flags: parse_flags(flags_byte),
+        sign_count:,
+        rest:,
+      ))
     _ -> Error(glasslock.ParseError("Authenticator data too short"))
   }
 }
@@ -499,11 +511,14 @@ pub fn user_verification_to_string(
 }
 
 /// Validates client data fields against expected ceremony values.
+///
+/// `expected_origins` is an allow-list: the authenticator-signed
+/// `clientDataJSON.origin` must match one of the provided origins.
 pub fn verify_client_data(
   client_data client_data: ClientData,
   expected_type expected_type: String,
   expected_challenge expected_challenge: BitArray,
-  expected_origin expected_origin: String,
+  expected_origins expected_origins: Set(String),
   allow_cross_origin allow_cross_origin: Bool,
   allowed_top_origins allowed_top_origins: List(String),
 ) -> Result(Nil, glasslock.Error) {
@@ -516,7 +531,7 @@ pub fn verify_client_data(
     return: Error(glasslock.VerificationMismatch(glasslock.ChallengeField)),
   )
   use <- bool.guard(
-    when: client_data.origin != expected_origin,
+    when: !set.contains(expected_origins, client_data.origin),
     return: Error(glasslock.VerificationMismatch(glasslock.OriginField)),
   )
   use <- bool.guard(

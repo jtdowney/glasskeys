@@ -9,7 +9,7 @@
 //// let #(options_json, challenge) = authentication.generate_options(
 ////   authentication.Options(
 ////     rp_id: "example.com",
-////     origin: "https://example.com",
+////     origins: ["https://example.com"],
 ////     allow_credentials: [stored_credential.id],
 ////     ..authentication.default_options()
 ////   ),
@@ -31,7 +31,7 @@
 //// let #(options_json, challenge) = authentication.generate_options(
 ////   authentication.Options(
 ////     rp_id: "example.com",
-////     origin: "https://example.com",
+////     origins: ["https://example.com"],
 ////     allow_credentials: [],
 ////     ..authentication.default_options()
 ////   ),
@@ -63,6 +63,7 @@ import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{type Option}
 import gleam/result
+import gleam/set
 import kryptos/crypto
 import kryptos/hash
 
@@ -71,8 +72,9 @@ pub type Options {
   Options(
     /// Relying party identifier (e.g., `"example.com"`).
     rp_id: String,
-    /// Expected origin URL (e.g., `"https://example.com"`).
-    origin: String,
+    /// Allow-list of acceptable origins (e.g., `["https://example.com"]`).
+    /// The authenticator-signed `clientDataJSON.origin` must match one entry.
+    origins: List(String),
     /// Timeout in milliseconds for the ceremony. Defaults to 60000.
     timeout: Int,
     /// User verification requirement. Defaults to preferred.
@@ -120,9 +122,9 @@ pub fn challenge_bytes(challenge: Challenge) -> BitArray {
   challenge.data.bytes
 }
 
-/// Get the origin from the challenge.
-pub fn challenge_origin(challenge: Challenge) -> String {
-  challenge.data.origin
+/// Get the list of expected origins from the challenge.
+pub fn challenge_origins(challenge: Challenge) -> List(String) {
+  set.to_list(challenge.data.origins)
 }
 
 /// Get the RP ID from the challenge.
@@ -130,12 +132,12 @@ pub fn challenge_rp_id(challenge: Challenge) -> String {
   challenge.data.rp_id
 }
 
-/// Returns default options with empty `rp_id` and `origin` values
+/// Returns default options with empty `rp_id` and `origins` values
 /// that must be overridden before use.
 pub fn default_options() -> Options {
   Options(
     rp_id: "",
-    origin: "",
+    origins: [],
     timeout: 60_000,
     user_verification: glasslock.VerificationPreferred,
     user_presence: glasslock.PresenceRequired,
@@ -145,13 +147,11 @@ pub fn default_options() -> Options {
   )
 }
 
-/// Generate authentication options and challenge verifier.
+/// Generate authentication options and a challenge verifier.
 ///
-/// Returns a tuple of (options, challenge) where:
-/// - `options` is the `PublicKeyCredentialRequestOptionsJSON` as a `Json` value.
-///   Call `gleam/json.to_string` to serialise for sending to the browser, or
-///   embed it directly inside another `json.object(...)` response envelope.
-/// - `challenge` is the verifier to use with `verify()`.
+/// The first element is a `PublicKeyCredentialRequestOptionsJSON` value
+/// ready to serialise with `gleam/json.to_string` or embed inside a
+/// response envelope. The second is the verifier to pass to `verify`.
 pub fn generate_options(options: Options) -> #(Json, Challenge) {
   let challenge_bytes = crypto.random_bytes(32)
   let challenge_b64 = bit_array.base64_url_encode(challenge_bytes, False)
@@ -179,7 +179,7 @@ pub fn generate_options(options: Options) -> #(Json, Challenge) {
     AuthenticationChallenge(
       data: internal.ChallengeData(
         bytes: challenge_bytes,
-        origin: options.origin,
+        origins: set.from_list(options.origins),
         rp_id: options.rp_id,
         user_verification: options.user_verification,
         user_presence: options.user_presence,
@@ -245,6 +245,11 @@ pub fn verify(
     return: Error(glasslock.VerificationMismatch(glasslock.CredentialTypeField)),
   )
 
+  // When `allow_credentials` is non-empty the presented ID must appear
+  // in it; separately, the presented ID must match the stored credential
+  // the caller looked up. Both are required: the allow-list enforces the
+  // RP's policy, and the stored-ID match prevents using one credential's
+  // response to authenticate as another.
   use <- bool.guard(
     when: !list.is_empty(challenge.allowed_credentials)
       && !list.contains(
@@ -263,7 +268,7 @@ pub fn verify(
     client_data:,
     expected_type: "webauthn.get",
     expected_challenge: challenge.data.bytes,
-    expected_origin: challenge.data.origin,
+    expected_origins: challenge.data.origins,
     allow_cross_origin: challenge.data.allow_cross_origin,
     allowed_top_origins: challenge.data.allowed_top_origins,
   ))

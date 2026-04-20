@@ -6,14 +6,15 @@
 //// import glasslock/registration
 ////
 //// // Generate options for browser
-//// let #(options_json, challenge) = registration.generate_options(
-//// registration.Options(
-////     rp: registration.Rp(id: "example.com", name: "My App"),
-////     user: registration.User(id: user_id, name: "john", display_name: "John"),
-////     origin: "https://example.com",
-////     ..registration.default_options()
-////   ),
-//// )
+//// let #(options_json, challenge) =
+////   registration.generate_options(
+////     registration.Options(
+////       rp: registration.Rp(id: "example.com", name: "My App"),
+////       user: registration.User(id: user_id, name: "john", display_name: "John"),
+////       origins: ["https://example.com"],
+////       ..registration.default_options()
+////     ),
+////   )
 ////
 //// // Send options_json to browser, receive response_json back
 ////
@@ -33,6 +34,7 @@ import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{type Option}
 import gleam/result
+import gleam/set
 import gose
 import kryptos/crypto
 
@@ -77,8 +79,9 @@ pub type Options {
     rp: Rp,
     /// User account identifier, username, and display name.
     user: User,
-    /// Expected origin URL (e.g., `"https://example.com"`).
-    origin: String,
+    /// Allow-list of acceptable origins (e.g., `["https://example.com"]`).
+    /// The authenticator-signed `clientDataJSON.origin` must match one entry.
+    origins: List(String),
     /// Timeout in milliseconds for the ceremony. Defaults to 60000.
     timeout: Int,
     /// Attestation conveyance preference. Defaults to none.
@@ -144,9 +147,9 @@ pub fn challenge_bytes(challenge: Challenge) -> BitArray {
   challenge.data.bytes
 }
 
-/// Get the origin from the challenge.
-pub fn challenge_origin(challenge: Challenge) -> String {
-  challenge.data.origin
+/// Get the list of expected origins from the challenge. Order is unspecified.
+pub fn challenge_origins(challenge: Challenge) -> List(String) {
+  set.to_list(challenge.data.origins)
 }
 
 /// Get the RP ID from the challenge.
@@ -154,13 +157,13 @@ pub fn challenge_rp_id(challenge: Challenge) -> String {
   challenge.data.rp_id
 }
 
-/// Returns default options with placeholder values for `rp`, `user`, and `origin`
+/// Returns default options with placeholder values for `rp`, `user`, and `origins`
 /// that must be overridden via record update syntax before use.
 pub fn default_options() -> Options {
   Options(
     rp: Rp(id: "", name: ""),
     user: User(id: <<>>, name: "", display_name: ""),
-    origin: "",
+    origins: [],
     timeout: 60_000,
     attestation: AttestationNone,
     authenticator_attachment: option.None,
@@ -174,13 +177,11 @@ pub fn default_options() -> Options {
   )
 }
 
-/// Generate registration options and challenge verifier.
+/// Generate registration options and a challenge verifier.
 ///
-/// Returns a tuple of (options, challenge) where:
-/// - `options` is the `PublicKeyCredentialCreationOptionsJSON` as a `Json` value.
-///   Call `gleam/json.to_string` to serialise for sending to the browser, or
-///   embed it directly inside another `json.object(...)` response envelope.
-/// - `challenge` is the verifier to use with `verify()`.
+/// The first element is a `PublicKeyCredentialCreationOptionsJSON` value
+/// ready to serialise with `gleam/json.to_string` or embed inside a
+/// response envelope. The second is the verifier to pass to `verify`.
 pub fn generate_options(options: Options) -> #(Json, Challenge) {
   let challenge_bytes = crypto.random_bytes(32)
   let challenge_b64 = bit_array.base64_url_encode(challenge_bytes, False)
@@ -249,7 +250,7 @@ pub fn generate_options(options: Options) -> #(Json, Challenge) {
     RegistrationChallenge(
       data: internal.ChallengeData(
         bytes: challenge_bytes,
-        origin: options.origin,
+        origins: set.from_list(options.origins),
         rp_id: options.rp.id,
         user_verification: options.user_verification,
         user_presence: options.user_presence,
@@ -349,7 +350,7 @@ pub fn verify(
     client_data:,
     expected_type: "webauthn.create",
     expected_challenge: cd.bytes,
-    expected_origin: cd.origin,
+    expected_origins: cd.origins,
     allow_cross_origin: cd.allow_cross_origin,
     allowed_top_origins: cd.allowed_top_origins,
   ))

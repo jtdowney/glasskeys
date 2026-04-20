@@ -1,7 +1,5 @@
-//// Test utilities for WebAuthn/FIDO2 credential verification.
-////
-//// This module provides helpers for generating test data in unit and
-//// integration tests. It exposes both high-level builders for common
+//// Helpers for generating WebAuthn/FIDO2 test data in unit and
+//// integration tests. Exposes high-level builders for common
 //// scenarios and low-level building blocks for edge cases.
 ////
 //// **This module is for testing only.** It should not be used in
@@ -20,7 +18,7 @@
 ////     registration.Options(
 ////       rp: registration.Rp(id: "example.com", name: "Test"),
 ////       user: registration.User(id: <<1, 2, 3>>, name: "test", display_name: "Test"),
-////       origin: "https://example.com",
+////       origins: ["https://example.com"],
 ////       ..registration.default_options()
 ////     ),
 ////   )
@@ -39,6 +37,7 @@ import glasslock/registration
 import gleam/bit_array
 import gleam/int
 import gleam/json
+import gleam/list
 import gleam/option.{type Option}
 import gose
 import gose/cose
@@ -71,9 +70,9 @@ pub type AuthenticatorFlags {
   )
 }
 
-/// An ES256 (P-256) key pair for testing WebAuthn flows.
+/// A COSE key pair for testing WebAuthn flows.
 pub type KeyPair {
-  KeyPair(key: cose.Key)
+  KeyPair(key: cose.Key, alg: gose.DigitalSignatureAlg)
 }
 
 /// Complete response data for a registration ceremony.
@@ -118,10 +117,12 @@ pub fn build_authentication_response(
       sign_count: sign_count,
     )
 
+  let assert Ok(origin) =
+    list.first(authentication.challenge_origins(challenge))
   let client_data_json =
     build_client_data_get(
       challenge: authentication.challenge_bytes(challenge),
-      origin: authentication.challenge_origin(challenge),
+      origin:,
       cross_origin: False,
     )
 
@@ -310,31 +311,28 @@ pub fn cose_key(keypair: KeyPair) -> BitArray {
 
 /// Generate a new random ES256 (P-256) key pair.
 pub fn generate_es256_keypair() -> KeyPair {
+  let alg = gose.Ecdsa(gose.EcdsaP256)
   let key =
     gose.generate_ec(ec.P256)
-    |> gose.with_alg(
-      gose.SigningAlg(gose.DigitalSignature(gose.Ecdsa(gose.EcdsaP256))),
-    )
-  KeyPair(key:)
+    |> gose.with_alg(gose.SigningAlg(gose.DigitalSignature(alg)))
+  KeyPair(key:, alg:)
 }
 
 /// Generate a new random Ed25519 key pair.
 pub fn generate_ed25519_keypair() -> KeyPair {
+  let alg = gose.Eddsa
   let key =
     gose.generate_eddsa(eddsa.Ed25519)
-    |> gose.with_alg(gose.SigningAlg(gose.DigitalSignature(gose.Eddsa)))
-  KeyPair(key:)
+    |> gose.with_alg(gose.SigningAlg(gose.DigitalSignature(alg)))
+  KeyPair(key:, alg:)
 }
 
 /// Generate a new random RS256 (RSA 2048-bit) key pair.
 pub fn generate_rs256_keypair() -> KeyPair {
-  let assert Ok(key) = gose.generate_rsa(2048)
-  let key =
-    gose.with_alg(
-      key,
-      gose.SigningAlg(gose.DigitalSignature(gose.RsaPkcs1(gose.RsaPkcs1Sha256))),
-    )
-  KeyPair(key:)
+  let alg = gose.RsaPkcs1(gose.RsaPkcs1Sha256)
+  let assert Ok(raw_key) = gose.generate_rsa(2048)
+  let key = gose.with_alg(raw_key, gose.SigningAlg(gose.DigitalSignature(alg)))
+  KeyPair(key:, alg:)
 }
 
 /// Get the public key in COSE CBOR format.
@@ -350,10 +348,8 @@ pub fn public_key(keypair: KeyPair) -> glasslock.PublicKey {
 /// bytes a real WebAuthn authenticator would produce: ASN.1 DER for ECDSA,
 /// raw for EdDSA, and raw PKCS#1 v1.5 bytes for RSA.
 pub fn sign(keypair keypair: KeyPair, message message: BitArray) -> BitArray {
-  let assert Ok(gose.SigningAlg(gose.DigitalSignature(sig_alg))) =
-    gose.alg(keypair.key)
   let assert Ok(private_der) = gose.to_der(keypair.key)
-  case sig_alg {
+  case keypair.alg {
     gose.Ecdsa(_) -> {
       let assert Ok(#(private, _)) = ec.from_der(private_der)
       ecdsa.sign(private, message, hash.Sha256)
@@ -444,10 +440,11 @@ pub fn build_registration_response_with_keypair(
       flags: default_flags(),
       sign_count: 0,
     )
+  let assert Ok(origin) = list.first(registration.challenge_origins(challenge))
   let client_data_json =
     build_client_data_create(
       challenge: registration.challenge_bytes(challenge),
-      origin: registration.challenge_origin(challenge),
+      origin:,
       cross_origin: False,
     )
   RegistrationResponse(
