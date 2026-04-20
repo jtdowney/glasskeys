@@ -37,15 +37,17 @@ glasskey runs in the browser and delegates to `navigator.credentials` (the Web A
 
 After each authentication, glasslock compares the authenticator's reported sign count against the stored value. A sign count that decreases (or drops to zero after previously being nonzero) returns a `SignCountRegression` error, indicating a possible cloned authenticator.
 
-## Supported Algorithm
+## Supported Algorithms
 
-Only ES256 (ECDSA with P-256 and SHA-256, COSE algorithm -7) is currently supported. Additional algorithms may be added in future versions.
+- ES256: ECDSA with P-256 and SHA-256 (COSE algorithm -7)
+- Ed25519: EdDSA with Ed25519 (COSE algorithm -8)
+- RS256: RSASSA-PKCS1-v1_5 with SHA-256 (COSE algorithm -257)
 
 ## Runtime Requirements
 
 ### glasslock
 
-On Erlang/OTP, use a currently supported OTP version with up-to-date OpenSSL/LibreSSL. On Node.js, use a currently supported LTS version. glasslock depends on kryptos for SHA-256 hashing and ECDSA signature verification, which uses the platform's native crypto implementation on both targets.
+On Erlang/OTP, use a currently supported OTP version with up-to-date OpenSSL/LibreSSL. On Node.js, use a currently supported LTS version. glasslock delegates cryptography to kryptos, which wraps `:crypto` on Erlang and `node:crypto` on JavaScript.
 
 ### glasskey
 
