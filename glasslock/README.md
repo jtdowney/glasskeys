@@ -5,7 +5,7 @@
 
 Server-side WebAuthn/FIDO2 credential verification for Gleam, targeting Erlang.
 
-Covers both registration and authentication ceremonies, generating challenge options for the browser and verifying the signed responses. Designed for use with [glasskey](../glasskey/) on the browser side, or any client that produces the same JSON format (e.g. [@simplewebauthn/browser](https://simplewebauthn.dev/docs/packages/browser)).
+Covers both registration and authentication ceremonies, generating challenge options for the browser and verifying the signed responses. Designed for use with [glasskey](https://hex.pm/packages/glasskey) on the browser side, or any client that produces the same JSON format (e.g. [@simplewebauthn/browser](https://simplewebauthn.dev/docs/packages/browser)).
 
 ## Installation
 

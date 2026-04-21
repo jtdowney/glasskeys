@@ -5,7 +5,7 @@
 
 Browser WebAuthn/FIDO2 bindings for Gleam, targeting JavaScript.
 
-Wraps the browser's `navigator.credentials` API to perform registration and authentication ceremonies. Produces JSON compatible with [glasslock](../glasslock/) for server-side verification.
+Wraps the browser's `navigator.credentials` API to perform registration and authentication ceremonies. Produces JSON compatible with [glasslock](https://hex.pm/packages/glasslock) for server-side verification.
 
 ## Installation
 
