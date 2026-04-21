@@ -24,8 +24,13 @@ pub fn sign_verify_round_trip_es256_test() {
   test_config()
   |> qcheck.run(qcheck.fixed_size_byte_aligned_bit_array(64), fn(message) {
     let signature = testing.sign(keypair:, message:)
-    let assert Ok(Nil) =
-      internal.verify_signature(key: parsed_key, alg:, message:, signature:)
+    assert internal.verify_signature(
+        key: parsed_key,
+        alg:,
+        message:,
+        signature:,
+      )
+      == Ok(Nil)
     Nil
   })
 }
@@ -37,8 +42,13 @@ pub fn sign_verify_round_trip_ed25519_test() {
   test_config()
   |> qcheck.run(qcheck.fixed_size_byte_aligned_bit_array(64), fn(message) {
     let signature = testing.sign(keypair:, message:)
-    let assert Ok(Nil) =
-      internal.verify_signature(key: parsed_key, alg:, message:, signature:)
+    assert internal.verify_signature(
+        key: parsed_key,
+        alg:,
+        message:,
+        signature:,
+      )
+      == Ok(Nil)
     Nil
   })
 }
@@ -50,8 +60,13 @@ pub fn sign_verify_round_trip_rs256_test() {
   test_config()
   |> qcheck.run(qcheck.fixed_size_byte_aligned_bit_array(64), fn(message) {
     let signature = testing.sign(keypair:, message:)
-    let assert Ok(Nil) =
-      internal.verify_signature(key: parsed_key, alg:, message:, signature:)
+    assert internal.verify_signature(
+        key: parsed_key,
+        alg:,
+        message:,
+        signature:,
+      )
+      == Ok(Nil)
     Nil
   })
 }
@@ -327,7 +342,7 @@ pub fn sign_count_monotonicity_test() {
           Nil
         }
         False -> {
-          let assert Error(glasslock.SignCountRegression) = result
+          assert result == Error(glasslock.SignCountRegression)
           Nil
         }
       }
@@ -345,8 +360,7 @@ pub fn verify_client_data_accepts_valid_test() {
       cross_origin: False,
       top_origin: option.None,
     )
-  let assert Ok(Nil) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -354,6 +368,7 @@ pub fn verify_client_data_accepts_valid_test() {
       allow_cross_origin: False,
       allowed_top_origins: [],
     )
+    == Ok(Nil)
 }
 
 pub fn verify_client_data_rejects_empty_origins_test() {
@@ -389,8 +404,7 @@ pub fn verify_client_data_rejects_wrong_type_test() {
       cross_origin: False,
       top_origin: option.None,
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.TypeField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -398,6 +412,7 @@ pub fn verify_client_data_rejects_wrong_type_test() {
       allow_cross_origin: False,
       allowed_top_origins: [],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.TypeField))
 }
 
 pub fn verify_client_data_rejects_wrong_challenge_test() {
@@ -409,8 +424,7 @@ pub fn verify_client_data_rejects_wrong_challenge_test() {
       cross_origin: False,
       top_origin: option.None,
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.ChallengeField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: <<9, 9, 9, 9>>,
@@ -418,6 +432,7 @@ pub fn verify_client_data_rejects_wrong_challenge_test() {
       allow_cross_origin: False,
       allowed_top_origins: [],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.ChallengeField))
 }
 
 pub fn verify_client_data_rejects_wrong_origin_test() {
@@ -430,8 +445,7 @@ pub fn verify_client_data_rejects_wrong_origin_test() {
       cross_origin: False,
       top_origin: option.None,
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.OriginField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -439,6 +453,7 @@ pub fn verify_client_data_rejects_wrong_origin_test() {
       allow_cross_origin: False,
       allowed_top_origins: [],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.OriginField))
 }
 
 pub fn verify_client_data_rejects_cross_origin_test() {
@@ -451,8 +466,7 @@ pub fn verify_client_data_rejects_cross_origin_test() {
       cross_origin: True,
       top_origin: option.None,
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.CrossOriginField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -460,6 +474,7 @@ pub fn verify_client_data_rejects_cross_origin_test() {
       allow_cross_origin: False,
       allowed_top_origins: [],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.CrossOriginField))
 }
 
 pub fn verify_client_data_allows_cross_origin_when_permitted_test() {
@@ -472,8 +487,7 @@ pub fn verify_client_data_allows_cross_origin_when_permitted_test() {
       cross_origin: True,
       top_origin: option.None,
     )
-  let assert Ok(Nil) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -481,69 +495,70 @@ pub fn verify_client_data_allows_cross_origin_when_permitted_test() {
       allow_cross_origin: True,
       allowed_top_origins: [],
     )
+    == Ok(Nil)
 }
 
 pub fn verify_rp_id_accepts_matching_hash_test() {
   let assert Ok(rp_id_hash) =
     crypto.hash(hash.Sha256, bit_array.from_string("example.com"))
-  let assert Ok(Nil) = internal.verify_rp_id(rp_id_hash, "example.com")
+  assert internal.verify_rp_id(rp_id_hash, "example.com") == Ok(Nil)
 }
 
 pub fn verify_rp_id_rejects_mismatching_hash_test() {
   let assert Ok(rp_id_hash) =
     crypto.hash(hash.Sha256, bit_array.from_string("evil.com"))
-  let assert Error(glasslock.VerificationMismatch(glasslock.RelyingPartyIdField)) =
-    internal.verify_rp_id(rp_id_hash, "example.com")
+  assert internal.verify_rp_id(rp_id_hash, "example.com")
+    == Error(glasslock.VerificationMismatch(glasslock.RelyingPartyIdField))
 }
 
 pub fn verify_user_policies_required_present_test() {
-  let assert Ok(Nil) =
-    internal.verify_user_policies(
+  assert internal.verify_user_policies(
       True,
       True,
       glasslock.PresenceRequired,
       glasslock.VerificationRequired,
     )
+    == Ok(Nil)
 }
 
 pub fn verify_user_policies_required_not_present_test() {
-  let assert Error(glasslock.UserVerificationFailed) =
-    internal.verify_user_policies(
+  assert internal.verify_user_policies(
       True,
       False,
       glasslock.PresenceRequired,
       glasslock.VerificationRequired,
     )
+    == Error(glasslock.UserVerificationFailed)
 }
 
 pub fn verify_user_policies_preferred_always_passes_test() {
-  let assert Ok(Nil) =
-    internal.verify_user_policies(
+  assert internal.verify_user_policies(
       True,
       False,
       glasslock.PresencePreferred,
       glasslock.VerificationPreferred,
     )
+    == Ok(Nil)
 }
 
 pub fn verify_user_policies_discouraged_always_passes_test() {
-  let assert Ok(Nil) =
-    internal.verify_user_policies(
+  assert internal.verify_user_policies(
       True,
       False,
       glasslock.PresenceDiscouraged,
       glasslock.VerificationDiscouraged,
     )
+    == Ok(Nil)
 }
 
 pub fn verify_user_policies_presence_required_not_present_test() {
-  let assert Error(glasslock.UserPresenceFailed) =
-    internal.verify_user_policies(
+  assert internal.verify_user_policies(
       False,
       False,
       glasslock.PresenceRequired,
       glasslock.VerificationDiscouraged,
     )
+    == Error(glasslock.UserPresenceFailed)
 }
 
 pub fn parse_public_key_rejects_missing_kty_test() {
@@ -771,8 +786,7 @@ pub fn verify_client_data_accepts_allowed_top_origin_test() {
       cross_origin: True,
       top_origin: option.Some("https://example.com"),
     )
-  let assert Ok(Nil) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -780,6 +794,7 @@ pub fn verify_client_data_accepts_allowed_top_origin_test() {
       allow_cross_origin: True,
       allowed_top_origins: ["https://example.com"],
     )
+    == Ok(Nil)
 }
 
 pub fn verify_client_data_rejects_unknown_top_origin_test() {
@@ -792,8 +807,7 @@ pub fn verify_client_data_rejects_unknown_top_origin_test() {
       cross_origin: True,
       top_origin: option.Some("https://evil.com"),
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.TopOriginField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -801,6 +815,7 @@ pub fn verify_client_data_rejects_unknown_top_origin_test() {
       allow_cross_origin: True,
       allowed_top_origins: ["https://example.com"],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.TopOriginField))
 }
 
 pub fn verify_client_data_rejects_missing_top_origin_with_allowlist_test() {
@@ -813,8 +828,7 @@ pub fn verify_client_data_rejects_missing_top_origin_with_allowlist_test() {
       cross_origin: True,
       top_origin: option.None,
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.TopOriginField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -822,6 +836,7 @@ pub fn verify_client_data_rejects_missing_top_origin_with_allowlist_test() {
       allow_cross_origin: True,
       allowed_top_origins: ["https://example.com"],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.TopOriginField))
 }
 
 pub fn verify_client_data_rejects_top_origin_with_empty_allowlist_test() {
@@ -834,8 +849,7 @@ pub fn verify_client_data_rejects_top_origin_with_empty_allowlist_test() {
       cross_origin: True,
       top_origin: option.Some("https://example.com"),
     )
-  let assert Error(glasslock.VerificationMismatch(glasslock.TopOriginField)) =
-    internal.verify_client_data(
+  assert internal.verify_client_data(
       client_data: cd,
       expected_type: "webauthn.create",
       expected_challenge: challenge,
@@ -843,4 +857,5 @@ pub fn verify_client_data_rejects_top_origin_with_empty_allowlist_test() {
       allow_cross_origin: True,
       allowed_top_origins: [],
     )
+    == Error(glasslock.VerificationMismatch(glasslock.TopOriginField))
 }

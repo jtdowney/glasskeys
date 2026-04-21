@@ -183,29 +183,18 @@ pub fn encode_challenge(challenge: Challenge) -> String {
 pub fn parse_challenge(
   encoded encoded: String,
 ) -> Result(Challenge, glasslock.Error) {
-  use #(version, kind, data_result, cose_algs) <- result.try(
-    json.parse(encoded, parsed_challenge_decoder())
-    |> result.replace_error(glasslock.ParseError("Invalid challenge encoding")),
-  )
-  use _ <- result.try(internal.check_challenge_version(version))
-  use _ <- result.try(internal.check_challenge_kind(kind, "registration"))
-  use data <- result.try(data_result)
+  let decoder = {
+    use algs <- decode.optional_field("algorithms", [], decode.list(decode.int))
+    decode.success(algs)
+  }
+
+  use #(data, cose_algs) <- result.try(internal.parse_challenge_shared(
+    encoded,
+    expected_kind: "registration",
+    rest_decoder: decoder,
+  ))
   use algorithms <- result.try(list.try_map(cose_algs, algorithm_from_cose))
   Ok(Challenge(data:, algorithms:))
-}
-
-fn parsed_challenge_decoder() -> decode.Decoder(
-  #(Int, String, Result(internal.ChallengeData, glasslock.Error), List(Int)),
-) {
-  use version <- decode.field("v", decode.int)
-  use kind <- decode.field("kind", decode.string)
-  use data_result <- decode.then(internal.challenge_data_decoder())
-  use algorithms <- decode.optional_field(
-    "algorithms",
-    [],
-    decode.list(decode.int),
-  )
-  decode.success(#(version, kind, data_result, algorithms))
 }
 
 /// Returns an `Options` record with default values.

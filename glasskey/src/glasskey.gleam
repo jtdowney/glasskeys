@@ -111,7 +111,7 @@ pub type ConditionalAuthentication {
 pub type Error {
   /// The browser does not support WebAuthn.
   NotSupported
-  /// The user denied the request or the operation timed out.
+  /// The user cancelled the request or the operation timed out.
   NotAllowed
   /// The operation was aborted.
   Aborted

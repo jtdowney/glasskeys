@@ -147,7 +147,8 @@ fn find_string_entry(
   entries: List(#(cbor.Cbor, cbor.Cbor)),
   key: String,
 ) -> Result(cbor.Cbor, glasslock.Error) {
-  find_entry(entries, cbor.String(key), key)
+  list.key_find(entries, cbor.String(key))
+  |> result.replace_error(glasslock.ParseError("Missing field: " <> key))
 }
 
 fn get_cbor_bytes(
@@ -348,15 +349,6 @@ pub fn parse_client_data(data: BitArray) -> Result(ClientData, glasslock.Error) 
   })
 }
 
-fn find_entry(
-  entries: List(#(cbor.Cbor, cbor.Cbor)),
-  key_cbor: cbor.Cbor,
-  key_name: String,
-) -> Result(cbor.Cbor, glasslock.Error) {
-  list.key_find(entries, key_cbor)
-  |> result.replace_error(glasslock.ParseError("Missing field: " <> key_name))
-}
-
 /// Parses a CBOR-encoded COSE public key using gose.
 pub fn parse_public_key(
   cbor_bytes: BitArray,
@@ -510,8 +502,7 @@ pub fn user_verification_to_string(
   }
 }
 
-/// Parses a WebAuthn user-verification string into a UserVerification enum.
-pub fn user_verification_from_string(
+fn user_verification_from_string(
   value: String,
 ) -> Result(glasslock.UserVerification, glasslock.Error) {
   case value {
@@ -522,8 +513,7 @@ pub fn user_verification_from_string(
   }
 }
 
-/// Converts a UserPresence enum to its string representation (serialization only).
-pub fn user_presence_to_string(presence: glasslock.UserPresence) -> String {
+fn user_presence_to_string(presence: glasslock.UserPresence) -> String {
   case presence {
     glasslock.PresenceRequired -> "required"
     glasslock.PresencePreferred -> "preferred"
@@ -531,8 +521,7 @@ pub fn user_presence_to_string(presence: glasslock.UserPresence) -> String {
   }
 }
 
-/// Parses a user-presence string into a UserPresence enum.
-pub fn user_presence_from_string(
+fn user_presence_from_string(
   value: String,
 ) -> Result(glasslock.UserPresence, glasslock.Error) {
   case value {
@@ -624,6 +613,28 @@ pub fn challenge_data_decoder() -> decode.Decoder(
       allowed_top_origins:,
     ))
   })
+}
+
+pub fn parse_challenge_shared(
+  encoded: String,
+  expected_kind expected_kind: String,
+  rest_decoder rest_decoder: decode.Decoder(tail),
+) -> Result(#(ChallengeData, tail), glasslock.Error) {
+  let envelope_decoder = {
+    use version <- decode.field("v", decode.int)
+    use kind <- decode.field("kind", decode.string)
+    use data_result <- decode.then(challenge_data_decoder())
+    use tail <- decode.then(rest_decoder)
+    decode.success(#(version, kind, data_result, tail))
+  }
+  use #(version, kind, data_result, tail) <- result.try(
+    json.parse(encoded, envelope_decoder)
+    |> result.replace_error(glasslock.ParseError("Invalid challenge encoding")),
+  )
+  use _ <- result.try(check_challenge_version(version))
+  use _ <- result.try(check_challenge_kind(kind, expected_kind))
+  use data <- result.try(data_result)
+  Ok(#(data, tail))
 }
 
 /// Validates client data fields against expected ceremony values.

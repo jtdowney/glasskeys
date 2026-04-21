@@ -150,29 +150,22 @@ pub fn encode_challenge(challenge: Challenge) -> String {
 pub fn parse_challenge(
   encoded encoded: String,
 ) -> Result(Challenge, glasslock.Error) {
-  use #(version, kind, data_result, allow_ids) <- result.try(
-    json.parse(encoded, parsed_challenge_decoder())
-    |> result.replace_error(glasslock.ParseError("Invalid challenge encoding")),
-  )
-  use _ <- result.try(internal.check_challenge_version(version))
-  use _ <- result.try(internal.check_challenge_kind(kind, "authentication"))
-  use data <- result.try(data_result)
+  let decoder = {
+    use ids <- decode.optional_field(
+      "allow_credentials",
+      [],
+      decode.list(decode.string),
+    )
+    decode.success(ids)
+  }
+
+  use #(data, allow_ids) <- result.try(internal.parse_challenge_shared(
+    encoded,
+    expected_kind: "authentication",
+    rest_decoder: decoder,
+  ))
   use allowed_credentials <- result.try(parse_allow_credentials(allow_ids))
   Ok(Challenge(data:, allowed_credentials:))
-}
-
-fn parsed_challenge_decoder() -> decode.Decoder(
-  #(Int, String, Result(internal.ChallengeData, glasslock.Error), List(String)),
-) {
-  use version <- decode.field("v", decode.int)
-  use kind <- decode.field("kind", decode.string)
-  use data_result <- decode.then(internal.challenge_data_decoder())
-  use allow_credentials <- decode.optional_field(
-    "allow_credentials",
-    [],
-    decode.list(decode.string),
-  )
-  decode.success(#(version, kind, data_result, allow_credentials))
 }
 
 fn parse_allow_credentials(
