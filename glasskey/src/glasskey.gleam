@@ -65,6 +65,7 @@ pub type Attestation {
 }
 
 /// Raw credential returned by the browser after `navigator.credentials.get()`.
+@internal
 pub type AuthenticationCredential {
   AuthenticationCredential(
     id: String,
@@ -124,6 +125,7 @@ pub type Error {
 }
 
 /// Raw credential returned by the browser after `navigator.credentials.create()`.
+@internal
 pub type RegistrationCredential {
   RegistrationCredential(
     id: String,
@@ -388,6 +390,7 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
   use algorithms <- decode.field(
     "pubKeyCredParams",
     decode.list({
+      use _ <- decode.field("type", public_key_credential_type_decoder())
       use alg <- decode.field("alg", algorithm_decoder())
       decode.success(alg)
     }),
@@ -488,8 +491,19 @@ fn base64url_decoder() -> decode.Decoder(BitArray) {
 
 fn credential_id_list_decoder() -> decode.Decoder(List(BitArray)) {
   decode.list({
+    use _ <- decode.field("type", public_key_credential_type_decoder())
     use id <- decode.field("id", base64url_decoder())
     decode.success(id)
+  })
+}
+
+fn public_key_credential_type_decoder() -> decode.Decoder(Nil) {
+  decode.string
+  |> decode.then(fn(type_) {
+    case type_ {
+      "public-key" -> decode.success(Nil)
+      _ -> decode.failure(Nil, "public-key credential type")
+    }
   })
 }
 

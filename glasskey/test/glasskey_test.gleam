@@ -308,6 +308,182 @@ pub fn decode_registration_options_unknown_algorithm_test() {
   let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
 }
 
+pub fn decode_registration_options_invalid_pub_key_cred_param_type_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("rp"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("example.com")),
+          #(dynamic.string("name"), dynamic.string("App")),
+        ]),
+      ),
+      #(
+        dynamic.string("user"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("dQ")),
+          #(dynamic.string("name"), dynamic.string("u")),
+          #(dynamic.string("displayName"), dynamic.string("U")),
+        ]),
+      ),
+      #(
+        dynamic.string("pubKeyCredParams"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("type"), dynamic.string("not-public-key")),
+            #(dynamic.string("alg"), dynamic.int(-7)),
+          ]),
+        ]),
+      ),
+      #(
+        dynamic.string("authenticatorSelection"),
+        dynamic.properties([
+          #(dynamic.string("residentKey"), dynamic.string("preferred")),
+          #(dynamic.string("userVerification"), dynamic.string("preferred")),
+        ]),
+      ),
+    ])
+
+  let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
+}
+
+pub fn decode_registration_options_missing_pub_key_cred_param_type_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("rp"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("example.com")),
+          #(dynamic.string("name"), dynamic.string("App")),
+        ]),
+      ),
+      #(
+        dynamic.string("user"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("dQ")),
+          #(dynamic.string("name"), dynamic.string("u")),
+          #(dynamic.string("displayName"), dynamic.string("U")),
+        ]),
+      ),
+      #(
+        dynamic.string("pubKeyCredParams"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("alg"), dynamic.int(-7)),
+          ]),
+        ]),
+      ),
+      #(
+        dynamic.string("authenticatorSelection"),
+        dynamic.properties([
+          #(dynamic.string("residentKey"), dynamic.string("preferred")),
+          #(dynamic.string("userVerification"), dynamic.string("preferred")),
+        ]),
+      ),
+    ])
+
+  let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
+}
+
+pub fn decode_registration_options_invalid_exclude_credentials_type_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("rp"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("example.com")),
+          #(dynamic.string("name"), dynamic.string("App")),
+        ]),
+      ),
+      #(
+        dynamic.string("user"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("dQ")),
+          #(dynamic.string("name"), dynamic.string("u")),
+          #(dynamic.string("displayName"), dynamic.string("U")),
+        ]),
+      ),
+      #(
+        dynamic.string("pubKeyCredParams"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("type"), dynamic.string("public-key")),
+            #(dynamic.string("alg"), dynamic.int(-7)),
+          ]),
+        ]),
+      ),
+      #(
+        dynamic.string("authenticatorSelection"),
+        dynamic.properties([
+          #(dynamic.string("residentKey"), dynamic.string("preferred")),
+          #(dynamic.string("userVerification"), dynamic.string("preferred")),
+        ]),
+      ),
+      #(
+        dynamic.string("excludeCredentials"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("id"), dynamic.string("AQID")),
+            #(dynamic.string("type"), dynamic.string("not-public-key")),
+          ]),
+        ]),
+      ),
+    ])
+
+  let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
+}
+
+pub fn decode_registration_options_missing_exclude_credentials_type_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("rp"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("example.com")),
+          #(dynamic.string("name"), dynamic.string("App")),
+        ]),
+      ),
+      #(
+        dynamic.string("user"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("dQ")),
+          #(dynamic.string("name"), dynamic.string("u")),
+          #(dynamic.string("displayName"), dynamic.string("U")),
+        ]),
+      ),
+      #(
+        dynamic.string("pubKeyCredParams"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("type"), dynamic.string("public-key")),
+            #(dynamic.string("alg"), dynamic.int(-7)),
+          ]),
+        ]),
+      ),
+      #(
+        dynamic.string("authenticatorSelection"),
+        dynamic.properties([
+          #(dynamic.string("residentKey"), dynamic.string("preferred")),
+          #(dynamic.string("userVerification"), dynamic.string("preferred")),
+        ]),
+      ),
+      #(
+        dynamic.string("excludeCredentials"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("id"), dynamic.string("AQID")),
+          ]),
+        ]),
+      ),
+    ])
+
+  let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
+}
+
 pub fn decode_registration_options_unknown_attestation_test() {
   let dyn =
     build_registration_options(
@@ -392,6 +568,43 @@ pub fn decode_authentication_options_minimal_test() {
   assert opt.allow_credentials == []
 }
 
+pub fn decode_authentication_options_invalid_allow_credentials_type_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("allowCredentials"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("id"), dynamic.string("AQID")),
+            #(dynamic.string("type"), dynamic.string("not-public-key")),
+          ]),
+        ]),
+      ),
+    ])
+
+  let assert Error(_) =
+    decode.run(dyn, glasskey.authentication_options_decoder())
+}
+
+pub fn decode_authentication_options_missing_allow_credentials_type_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("allowCredentials"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("id"), dynamic.string("AQID")),
+          ]),
+        ]),
+      ),
+    ])
+
+  let assert Error(_) =
+    decode.run(dyn, glasskey.authentication_options_decoder())
+}
+
 pub fn decode_authentication_options_missing_required_fields_test() {
   let assert Error(_) =
     decode.run(
@@ -474,7 +687,12 @@ pub fn encode_authentication_response_with_user_handle_test() {
 
   let decoder = {
     use id <- decode.field("id", decode.string)
+    use raw_id <- decode.field("rawId", decode.string)
     use credential_type <- decode.field("type", decode.string)
+    use client_data_json <- decode.subfield(
+      ["response", "clientDataJSON"],
+      decode.string,
+    )
     use authenticator_data <- decode.subfield(
       ["response", "authenticatorData"],
       decode.string,
@@ -486,18 +704,22 @@ pub fn encode_authentication_response_with_user_handle_test() {
     )
     decode.success(#(
       id,
+      raw_id,
       credential_type,
+      client_data_json,
       authenticator_data,
       signature,
       user_handle,
     ))
   }
 
-  let assert Ok(#(id, credential_type, ad, sig, uh)) =
+  let assert Ok(#(id, raw_id, credential_type, cdj, ad, sig, uh)) =
     json.parse(result, decoder)
 
   assert id == "cred-abc"
+  assert raw_id == "ChQe"
   assert credential_type == "public-key"
+  assert cdj == "KDI8"
   assert ad == "RlBa"
   assert sig == "ZG54"
   assert uh == option.Some("AQI")
