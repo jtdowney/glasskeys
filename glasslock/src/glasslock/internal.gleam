@@ -107,7 +107,9 @@ pub fn parse_attestation_object(
   cbor.decode_all(data)
 }
 
-pub fn verify_attestation(statement: cbor.Cbor) -> Result(Nil, glasslock.Error) {
+pub fn verify_attestation(
+  statement: cbor.Cbor,
+) -> Result(Nil, glasslock.Error) {
   case statement {
     cbor.Map([]) -> Ok(Nil)
     _ ->
@@ -288,7 +290,9 @@ pub fn decode_optional_base64url(
   }
 }
 
-pub fn parse_client_data(data: BitArray) -> Result(ClientData, glasslock.Error) {
+pub fn parse_client_data(
+  data: BitArray,
+) -> Result(ClientData, glasslock.Error) {
   use json_string <- result.try(
     bit_array.to_string(data)
     |> result.replace_error(glasslock.ParseError("Invalid UTF-8")),
@@ -625,7 +629,10 @@ pub fn verify_client_data(
   Ok(Nil)
 }
 
-fn top_origin_allowed(top_origin: Option(String), allowed: List(String)) -> Bool {
+fn top_origin_allowed(
+  top_origin: Option(String),
+  allowed: List(String),
+) -> Bool {
   case top_origin {
     option.Some(top) -> list.contains(allowed, top)
     option.None -> list.is_empty(allowed)

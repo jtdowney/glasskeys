@@ -88,7 +88,10 @@ pub fn get_user_by_credential_id(
   |> result.try(get_user(store, _))
 }
 
-pub fn get_user_by_user_id(store: Store, user_id: BitArray) -> Result(User, Nil) {
+pub fn get_user_by_user_id(
+  store: Store,
+  user_id: BitArray,
+) -> Result(User, Nil) {
   trove.get_in(
     store.db,
     keyspace: store.user_id_index,
@@ -131,7 +134,11 @@ pub fn save(
   })
 }
 
-pub fn update(store: Store, user: User, credential: glasslock.Credential) -> Nil {
+pub fn update(
+  store: Store,
+  user: User,
+  credential: glasslock.Credential,
+) -> Nil {
   let updated_user =
     User(..user, credentials: replace_credential(user.credentials, credential))
   trove.put_in(

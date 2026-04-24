@@ -494,7 +494,9 @@ pub fn registration_challenge_bytes(
 }
 
 /// Extract the Relying Party ID from a registration challenge.
-pub fn registration_challenge_rp_id(challenge: registration.Challenge) -> String {
+pub fn registration_challenge_rp_id(
+  challenge: registration.Challenge,
+) -> String {
   registration.challenge_data(challenge).rp_id
 }
 
