@@ -7,6 +7,23 @@ on:
   pull_request:
 
 jobs:
+  check-format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          gleam-version: "1.16"
+          rebar3-version: "3"
+      - name: glasslock
+        working-directory: glasslock
+        run: gleam format --check src test
+      - name: glasskey
+        working-directory: glasskey
+        run: gleam format --check src test
+
   glasslock:
     name: glasslock (Gleam ${{ matrix.gleam }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
@@ -27,7 +44,6 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
-      - run: gleam format --check src test
 
   glasskey:
     name: glasskey (Gleam ${{ matrix.gleam }})
@@ -48,7 +64,6 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
-      - run: gleam format --check src test
 
   example-backend:
     name: example/backend
