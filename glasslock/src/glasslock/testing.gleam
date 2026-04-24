@@ -14,7 +14,7 @@
 //// import glasslock/testing
 ////
 //// pub fn registration_test() {
-////   let #(_, challenge) =
+////   let assert Ok(#(_, challenge)) =
 ////     registration.request(
 ////       relying_party: registration.RelyingParty(id: "example.com", name: "Test"),
 ////       user: registration.User(id: <<1, 2, 3>>, name: "test", display_name: "Test"),

@@ -29,10 +29,7 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case json.parse(body, decoder) {
-    Error(_) ->
-      json.object([#("error", json.string("invalid json"))])
-      |> json.to_string
-      |> wisp.json_response(400)
+    Error(_) -> error_response("invalid json", 400)
     Ok(username) -> begin_registration(req, username, ctx)
   }
 }
@@ -46,10 +43,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case json.parse(body, decoder) {
-    Error(_) ->
-      json.object([#("error", json.string("invalid json"))])
-      |> json.to_string
-      |> wisp.json_response(400)
+    Error(_) -> error_response("invalid json", 400)
     Ok(response) -> complete_registration(req, response, ctx)
   }
 }
@@ -60,13 +54,11 @@ fn begin_registration(
   ctx: web.Context,
 ) -> wisp.Response {
   case credentials.get_user(ctx.credentials, username) {
-    Ok(_) ->
-      json.object([#("error", json.string("username already registered"))])
-      |> json.to_string
-      |> wisp.json_response(409)
+    Ok(_) -> error_response("username already registered", 409)
     Error(_) -> {
       let user_id = crypto.strong_random_bytes(32)
-      let #(options_json, challenge) =
+
+      case
         registration.request(
           relying_party: registration.RelyingParty(
             id: ctx.rp_id,
@@ -83,20 +75,24 @@ fn begin_registration(
             resident_key: registration.ResidentKeyRequired,
           ),
         )
+      {
+        Ok(#(options_json, challenge)) -> {
+          let pending =
+            encode_pending(PendingRegistration(username:, user_id:, challenge:))
 
-      let pending =
-        encode_pending(PendingRegistration(username:, user_id:, challenge:))
-
-      json.object([#("options", options_json)])
-      |> json.to_string
-      |> wisp.json_response(200)
-      |> wisp.set_cookie(
-        req,
-        session_cookie,
-        pending,
-        wisp.Signed,
-        session_max_age,
-      )
+          json.object([#("options", options_json)])
+          |> json.to_string
+          |> wisp.json_response(200)
+          |> wisp.set_cookie(
+            req,
+            session_cookie,
+            pending,
+            wisp.Signed,
+            session_max_age,
+          )
+        }
+        Error(_) -> error_response("invalid registration options", 500)
+      }
     }
   }
 }
@@ -137,11 +133,15 @@ fn complete_registration(
       |> wisp.json_response(200)
       |> clear_session(req)
     Error(#(message, status)) ->
-      json.object([#("error", json.string(message))])
-      |> json.to_string
-      |> wisp.json_response(status)
+      error_response(message, status)
       |> clear_session(req)
   }
+}
+
+fn error_response(message: String, status: Int) -> wisp.Response {
+  json.object([#("error", json.string(message))])
+  |> json.to_string
+  |> wisp.json_response(status)
 }
 
 fn clear_session(response: wisp.Response, req: wisp.Request) -> wisp.Response {

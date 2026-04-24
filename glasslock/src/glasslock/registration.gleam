@@ -6,7 +6,7 @@
 //// import glasslock/registration
 ////
 //// // Generate options for browser
-//// let #(request_json, challenge) =
+//// let assert Ok(#(request_json, challenge)) =
 ////   registration.request(
 ////     relying_party: registration.RelyingParty(id: "example.com", name: "My App"),
 ////     user: registration.User(id: user_id, name: "john", display_name: "John"),
@@ -98,9 +98,9 @@ pub type Options {
     /// Whether to allow cross-origin requests. Defaults to `False`.
     allow_cross_origin: Bool,
     /// Accepted signing algorithms, in preference order (the authenticator
-    /// picks the first it supports). Defaults to `[Es256]` because it is the
-    /// one algorithm every mainstream authenticator handles; opt in to
-    /// `Ed25519` or `Rs256` when broader coverage is desired.
+    /// picks the first it supports). Must be non-empty. Defaults to `[Es256]`
+    /// because it is the one algorithm every mainstream authenticator handles;
+    /// opt in to `Ed25519` or `Rs256` when broader coverage is desired.
     algorithms: List(Algorithm),
     /// Credential IDs to exclude (prevent re-registration).
     exclude_credentials: List(glasslock.CredentialId),
@@ -247,7 +247,20 @@ pub fn request(
   user user: User,
   origins origins: List(String),
   options options: Options,
-) -> #(Json, Challenge) {
+) -> Result(#(Json, Challenge), Error) {
+  use <- bool.guard(
+    when: list.is_empty(origins),
+    return: Error(ParseError(
+      "no allowed origins configured; pass a non-empty origins list to request",
+    )),
+  )
+  use <- bool.guard(
+    when: list.is_empty(options.algorithms),
+    return: Error(ParseError(
+      "no algorithms configured; pass a non-empty algorithms list to request",
+    )),
+  )
+
   let challenge_bytes = crypto.random_bytes(32)
   let challenge_b64 = bit_array.base64_url_encode(challenge_bytes, False)
 
@@ -325,7 +338,7 @@ pub fn request(
       algorithms: options.algorithms,
     )
 
-  #(options_json, challenge)
+  Ok(#(options_json, challenge))
 }
 
 fn algorithm_to_cose(alg: Algorithm) -> Int {

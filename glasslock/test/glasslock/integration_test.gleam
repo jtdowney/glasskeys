@@ -33,7 +33,7 @@ fn register_then_authenticate(
   let user =
     registration.User(id: <<1, 2, 3, 4>>, name: "test", display_name: "Test")
 
-  let #(_, reg_challenge) =
+  let assert Ok(#(_, reg_challenge)) =
     registration.request(
       relying_party:,
       user:,

@@ -13,7 +13,7 @@
 //// ```gleam
 //// import glasslock/registration
 ////
-//// let #(request_json, challenge) =
+//// let assert Ok(#(request_json, challenge)) =
 ////   registration.request(
 ////     relying_party: registration.RelyingParty(id: "example.com", name: "My App"),
 ////     user: registration.User(id: user_id, name: username, display_name: username),

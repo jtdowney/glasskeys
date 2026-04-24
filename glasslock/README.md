@@ -21,7 +21,7 @@ gleam add glasslock
 import glasslock/registration
 
 // 1. Generate options to send to the browser
-let #(options_json, challenge) =
+let assert Ok(#(options_json, challenge)) =
   registration.request(
     relying_party: registration.RelyingParty(id: "example.com", name: "My App"),
     user: registration.User(id: user_id, name: username, display_name: username),

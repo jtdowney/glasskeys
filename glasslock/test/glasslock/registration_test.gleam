@@ -180,6 +180,67 @@ pub fn request_attestation_variants_test() {
   })
 }
 
+pub fn request_rejects_empty_origins_test() {
+  let assert Error(registration.ParseError(message)) =
+    registration.request(
+      relying_party: registration.RelyingParty(
+        id: "example.com",
+        name: "Test App",
+      ),
+      user: registration.User(
+        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+        name: "testuser",
+        display_name: "Test User",
+      ),
+      origins: [],
+      options: registration.default_options(),
+    )
+  assert message
+    == "no allowed origins configured; pass a non-empty origins list to request"
+}
+
+pub fn request_rejects_empty_algorithms_test() {
+  let assert Error(registration.ParseError(message)) =
+    registration.request(
+      relying_party: registration.RelyingParty(
+        id: "example.com",
+        name: "Test App",
+      ),
+      user: registration.User(
+        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+        name: "testuser",
+        display_name: "Test User",
+      ),
+      origins: ["https://example.com"],
+      options: registration.Options(
+        ..registration.default_options(),
+        algorithms: [],
+      ),
+    )
+  assert message
+    == "no algorithms configured; pass a non-empty algorithms list to request"
+}
+
+pub fn request_accepts_valid_inputs_test() {
+  let assert Ok(#(_, challenge)) =
+    registration.request(
+      relying_party: registration.RelyingParty(
+        id: "example.com",
+        name: "Test App",
+      ),
+      user: registration.User(
+        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+        name: "testuser",
+        display_name: "Test User",
+      ),
+      origins: ["https://example.com"],
+      options: registration.default_options(),
+    )
+
+  assert testing.registration_challenge_origins(challenge)
+    == ["https://example.com"]
+}
+
 pub fn verify_valid_registration_test() {
   let challenge = setup_challenge()
   let response = testing.build_registration_response(challenge:)
@@ -439,7 +500,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
       algorithms:,
       allowed_top_origins:,
     )
-  let #(_, challenge) =
+  let assert Ok(#(_, challenge)) =
     registration.request(
       relying_party: registration.RelyingParty(id: rp_id, name: "Test App"),
       user: registration.User(
@@ -469,7 +530,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
 }
 
 pub fn decoded_challenge_drives_verify_test() {
-  let #(_, challenge) =
+  let assert Ok(#(_, challenge)) =
     registration.request(
       relying_party: registration.RelyingParty(
         id: "example.com",
@@ -540,19 +601,21 @@ fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
 fn make_request(
   options: registration.Options,
 ) -> #(json.Json, registration.Challenge) {
-  registration.request(
-    relying_party: registration.RelyingParty(
-      id: "example.com",
-      name: "Test App",
-    ),
-    user: registration.User(
-      id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
-      name: "testuser",
-      display_name: "Test User",
-    ),
-    origins: ["https://example.com"],
-    options:,
-  )
+  let assert Ok(request) =
+    registration.request(
+      relying_party: registration.RelyingParty(
+        id: "example.com",
+        name: "Test App",
+      ),
+      user: registration.User(
+        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+        name: "testuser",
+        display_name: "Test User",
+      ),
+      origins: ["https://example.com"],
+      options:,
+    )
+  request
 }
 
 fn setup_challenge() -> registration.Challenge {

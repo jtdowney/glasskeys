@@ -842,7 +842,7 @@ pub fn decoded_challenge_drives_verify_test() {
 }
 
 pub fn decode_rejects_registration_blob_test() {
-  let #(_, reg_challenge) =
+  let assert Ok(#(_, reg_challenge)) =
     registration.request(
       relying_party: registration.RelyingParty(
         id: "example.com",
