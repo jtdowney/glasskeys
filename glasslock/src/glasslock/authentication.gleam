@@ -111,7 +111,8 @@ pub type Error {
   InvalidSignature
   /// The credential ID is not in the allowed credentials list or does not match the stored credential.
   CredentialNotAllowed
-  /// The sign count decreased, indicating a possible cloned authenticator.
+  /// The sign count did not strictly increase from a nonzero stored count,
+  /// indicating a possible cloned authenticator.
   SignCountRegression
   /// User presence was required but not asserted by the authenticator.
   UserPresenceFailed

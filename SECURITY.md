@@ -35,7 +35,7 @@ glasskey runs in the browser and delegates to `navigator.credentials` (the Web A
 
 ### Sign Count Verification
 
-After each authentication, glasslock compares the authenticator's reported sign count against the stored value. A sign count that decreases (or drops to zero after previously being nonzero) returns a `SignCountRegression` error, indicating a possible cloned authenticator.
+After each authentication, glasslock compares the authenticator's reported sign count against the stored value. If the stored count is nonzero, the new count must be strictly greater than the stored count. A new count that is zero, less than the stored count, or equal to the stored count returns a `SignCountRegression` error, indicating a possible cloned authenticator.
 
 ## Supported Algorithms
 
