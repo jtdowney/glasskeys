@@ -48,7 +48,7 @@ pub fn parse_client_data_valid_test() {
   assert cd.type_ == "webauthn.get"
   assert cd.challenge == challenge
   assert cd.origin == "https://example.com"
-  assert cd.cross_origin == False
+  assert !cd.cross_origin
 }
 
 pub fn parse_client_data_invalid_utf8_test() {
@@ -85,8 +85,8 @@ pub fn parse_authentication_auth_data_valid_test() {
     )
 
   let assert Ok(ad) = internal.parse_authentication_auth_data(auth_data)
-  assert ad.user_present == True
-  assert ad.user_verified == False
+  assert ad.user_present
+  assert !ad.user_verified
   assert ad.sign_count == 42
 }
 
@@ -193,7 +193,7 @@ pub fn parse_authentication_auth_data_ignores_extensions_test() {
       <<0xA0>>,
     ])
   let assert Ok(ad) = internal.parse_authentication_auth_data(auth_data)
-  assert ad.user_present == True
+  assert ad.user_present
   assert ad.sign_count == 1
 }
 
@@ -239,7 +239,7 @@ pub fn parse_registration_auth_data_ignores_extensions_test() {
     ])
 
   let assert Ok(ad) = internal.parse_registration_auth_data(auth_data)
-  assert ad.user_present == True
+  assert ad.user_present
   assert ad.sign_count == 0
   assert ad.attested_credential.credential_id == raw_cred_id
 
@@ -601,7 +601,7 @@ pub fn parse_client_data_with_missing_cross_origin_defaults_false_test() {
     |> bit_array.from_string
 
   let assert Ok(cd) = internal.parse_client_data(client_data)
-  assert cd.cross_origin == False
+  assert !cd.cross_origin
   assert cd.top_origin == option.None
 }
 
@@ -654,7 +654,7 @@ pub fn parse_client_data_with_top_origin_test() {
     )
 
   let assert Ok(cd) = internal.parse_client_data(client_data)
-  assert cd.cross_origin == True
+  assert cd.cross_origin
   assert cd.top_origin == option.Some("https://example.com")
 }
 

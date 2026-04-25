@@ -45,8 +45,8 @@ pub fn build_registration_auth_data_roundtrips_test() {
     )
 
   let assert Ok(ad) = internal.parse_registration_auth_data(auth_data)
-  assert ad.user_present == True
-  assert ad.user_verified == True
+  assert ad.user_present
+  assert ad.user_verified
   assert ad.sign_count == 42
   assert ad.attested_credential.credential_id == raw_credential_id
 
@@ -67,7 +67,7 @@ pub fn build_authentication_auth_data_roundtrips_test() {
     )
 
   let assert Ok(ad) = internal.parse_authentication_auth_data(auth_data)
-  assert ad.user_present == True
-  assert ad.user_verified == False
+  assert ad.user_present
+  assert !ad.user_verified
   assert ad.sign_count == 7
 }
