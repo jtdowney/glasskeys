@@ -2,6 +2,7 @@ import backend/credentials
 import backend/router
 import backend/web
 import gleam/erlang/process
+import gleam/result
 import mist
 import wisp
 import wisp/wisp_mist
@@ -9,7 +10,8 @@ import wisp/wisp_mist
 pub fn main() {
   wisp.configure_logger()
 
-  let assert Ok(credential_store) = credentials.open("priv/storage")
+  let priv_dir = wisp.priv_directory("backend") |> result.unwrap("priv")
+  let assert Ok(credential_store) = credentials.open(priv_dir <> "/storage")
 
   let ctx =
     web.Context(
