@@ -97,6 +97,26 @@ pub type ResponseInfo {
   )
 }
 
+/// Errors that can occur during authentication verification.
+pub type Error {
+  /// A verification field does not match the expected value.
+  VerificationMismatch(field: glasslock.VerificationField)
+  /// The key format, algorithm, or curve is not supported.
+  UnsupportedKey(reason: String)
+  /// Failed to parse data (CBOR, JSON, or authenticator data).
+  ParseError(message: String)
+  /// The cryptographic signature verification failed.
+  InvalidSignature
+  /// The credential ID is not in the allowed credentials list or does not match the stored credential.
+  CredentialNotAllowed
+  /// The sign count decreased, indicating a possible cloned authenticator.
+  SignCountRegression
+  /// User presence was required but not asserted by the authenticator.
+  UserPresenceFailed
+  /// User verification was required but not performed by the authenticator.
+  UserVerificationFailed
+}
+
 /// A finalized authentication challenge ready for verification.
 pub opaque type Challenge {
   Challenge(
@@ -152,7 +172,7 @@ pub fn challenge_data(challenge: Challenge) -> internal.ChallengeData {
 /// Decode a previously-encoded authentication challenge. Returns a
 /// `ParseError` if the blob is malformed, encodes a registration challenge,
 /// or uses an unsupported format version.
-pub fn parse_challenge(encoded: String) -> Result(Challenge, glasslock.Error) {
+pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
   let decoder = {
     use ids <- decode.optional_field(
       "allow_credentials",
@@ -162,21 +182,25 @@ pub fn parse_challenge(encoded: String) -> Result(Challenge, glasslock.Error) {
     decode.success(ids)
   }
 
-  use #(data, allow_ids) <- result.try(internal.parse_challenge_shared(
-    encoded,
-    expected_kind: "authentication",
-    rest_decoder: decoder,
-  ))
+  use #(data, allow_ids) <- result.try(
+    internal.parse_challenge_shared(
+      encoded,
+      expected_kind: "authentication",
+      rest_decoder: decoder,
+    )
+    |> result.map_error(internal_error_to_authentication_error),
+  )
   use allowed_credentials <- result.try(parse_allow_credentials(allow_ids))
   Ok(Challenge(data:, allowed_credentials:))
 }
 
 fn parse_allow_credentials(
   encoded: List(String),
-) -> Result(List(glasslock.CredentialId), glasslock.Error) {
+) -> Result(List(glasslock.CredentialId), Error) {
   list.try_map(encoded, fn(id_b64) {
     internal.decode_base64url(id_b64, "allow_credentials")
     |> result.map(glasslock.CredentialId)
+    |> result.map_error(internal_error_to_authentication_error)
   })
 }
 
@@ -244,17 +268,16 @@ pub fn request(
 /// Parse response JSON to get credential_id/user_handle for lookup (discoverable flow).
 ///
 /// Call this first, look up the stored credential, then call verify().
-pub fn parse_response(
-  response_json: String,
-) -> Result(ResponseInfo, glasslock.Error) {
+pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
   use response <- result.try(parse_response_json(response_json))
-  use credential_id <- result.try(internal.decode_base64url(
-    response.raw_id,
-    "rawId",
-  ))
+  use credential_id <- result.try(
+    internal.decode_base64url(response.raw_id, "rawId")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
 
   internal.decode_optional_base64url(response.user_handle, "userHandle")
   |> result.map(ResponseInfo(glasslock.CredentialId(credential_id), _))
+  |> result.map_error(internal_error_to_authentication_error)
 }
 
 /// Verify a challenge response from the browser.
@@ -269,29 +292,29 @@ pub fn verify(
   response_json response_json: String,
   challenge challenge: Challenge,
   stored stored: glasslock.Credential,
-) -> Result(glasslock.Credential, glasslock.Error) {
+) -> Result(glasslock.Credential, Error) {
   use response <- result.try(parse_response_json(response_json))
 
-  use credential_id <- result.try(internal.decode_base64url(
-    response.raw_id,
-    "rawId",
-  ))
-  use client_data_json <- result.try(internal.decode_base64url(
-    response.client_data_json,
-    "clientDataJSON",
-  ))
-  use authenticator_data <- result.try(internal.decode_base64url(
-    response.authenticator_data,
-    "authenticatorData",
-  ))
-  use signature <- result.try(internal.decode_base64url(
-    response.signature,
-    "signature",
-  ))
+  use credential_id <- result.try(
+    internal.decode_base64url(response.raw_id, "rawId")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use client_data_json <- result.try(
+    internal.decode_base64url(response.client_data_json, "clientDataJSON")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use authenticator_data <- result.try(
+    internal.decode_base64url(response.authenticator_data, "authenticatorData")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use signature <- result.try(
+    internal.decode_base64url(response.signature, "signature")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
 
   use <- bool.guard(
     when: response.credential_type != "public-key",
-    return: Error(glasslock.VerificationMismatch(glasslock.CredentialTypeField)),
+    return: Error(VerificationMismatch(glasslock.CredentialTypeField)),
   )
 
   // When `allow_credentials` is non-empty the presented ID must appear
@@ -305,54 +328,68 @@ pub fn verify(
       challenge.allowed_credentials,
       glasslock.CredentialId(credential_id),
     ),
-    return: Error(glasslock.CredentialNotAllowed),
+    return: Error(CredentialNotAllowed),
   )
   use <- bool.guard(
     when: glasslock.CredentialId(credential_id) != stored.id,
-    return: Error(glasslock.CredentialNotAllowed),
+    return: Error(CredentialNotAllowed),
   )
 
-  use client_data <- result.try(internal.parse_client_data(client_data_json))
-  use _ <- result.try(internal.verify_client_data(
-    client_data,
-    expected_type: "webauthn.get",
-    expected_challenge: challenge.data.bytes,
-    expected_origins: challenge.data.origins,
-    allow_cross_origin: challenge.data.allow_cross_origin,
-    allowed_top_origins: challenge.data.allowed_top_origins,
-  ))
+  use client_data <- result.try(
+    internal.parse_client_data(client_data_json)
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use _ <- result.try(
+    internal.verify_client_data(
+      client_data,
+      expected_type: "webauthn.get",
+      expected_challenge: challenge.data.bytes,
+      expected_origins: challenge.data.origins,
+      allow_cross_origin: challenge.data.allow_cross_origin,
+      allowed_top_origins: challenge.data.allowed_top_origins,
+    )
+    |> result.map_error(internal_error_to_authentication_error),
+  )
 
   use client_data_hash <- result.try(
     crypto.hash(hash.Sha256, client_data_json)
-    |> result.replace_error(glasslock.ParseError("Failed to hash client data")),
+    |> result.replace_error(ParseError("Failed to hash client data")),
   )
 
-  use auth_data <- result.try(internal.parse_authentication_auth_data(
-    authenticator_data,
-  ))
+  use auth_data <- result.try(
+    internal.parse_authentication_auth_data(authenticator_data)
+    |> result.map_error(internal_error_to_authentication_error),
+  )
 
-  use _ <- result.try(internal.verify_rp_id(
-    auth_data.rp_id_hash,
-    challenge.data.rp_id,
-  ))
-  use _ <- result.try(internal.verify_user_policies(
-    auth_data.user_present,
-    auth_data.user_verified,
-    challenge.data.user_presence,
-    challenge.data.user_verification,
-  ))
+  use _ <- result.try(
+    internal.verify_rp_id(auth_data.rp_id_hash, challenge.data.rp_id)
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use _ <- result.try(
+    internal.verify_user_policies(
+      auth_data.user_present,
+      auth_data.user_verified,
+      challenge.data.user_presence,
+      challenge.data.user_verification,
+    )
+    |> result.map_error(internal_error_to_authentication_error),
+  )
 
   let signed_data = bit_array.concat([authenticator_data, client_data_hash])
   let glasslock.PublicKey(public_key_cbor) = stored.public_key
-  use #(parsed_key, alg) <- result.try(internal.parse_public_key(
-    public_key_cbor,
-  ))
-  use _ <- result.try(internal.verify_signature(
-    parsed_key,
-    alg:,
-    message: signed_data,
-    signature:,
-  ))
+  use #(parsed_key, alg) <- result.try(
+    internal.parse_public_key(public_key_cbor)
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use _ <- result.try(
+    internal.verify_signature(
+      parsed_key,
+      alg:,
+      message: signed_data,
+      signature:,
+    )
+    |> result.map_error(internal_error_to_authentication_error),
+  )
 
   // Sign count 0 means the authenticator does not track signature counts.
   // Accept any new value when stored is 0. Reject when new drops to 0 but
@@ -362,17 +399,12 @@ pub fn verify(
     _, 0 -> False
     _, _ -> auth_data.sign_count > stored.sign_count
   }
-  use <- bool.guard(
-    when: !sign_count_ok,
-    return: Error(glasslock.SignCountRegression),
-  )
+  use <- bool.guard(when: !sign_count_ok, return: Error(SignCountRegression))
 
   Ok(glasslock.Credential(..stored, sign_count: auth_data.sign_count))
 }
 
-fn parse_response_json(
-  json_string: String,
-) -> Result(ParsedResponse, glasslock.Error) {
+fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
   let decoder = {
     use raw_id <- decode.field("rawId", decode.string)
     use credential_type <- decode.field("type", decode.string)
@@ -401,7 +433,16 @@ fn parse_response_json(
   }
 
   json.parse(json_string, decoder)
-  |> result.replace_error(glasslock.ParseError(
-    "Invalid authentication response JSON",
-  ))
+  |> result.replace_error(ParseError("Invalid authentication response JSON"))
+}
+
+fn internal_error_to_authentication_error(error: internal.Error) -> Error {
+  case error {
+    internal.VerificationMismatch(field) -> VerificationMismatch(field)
+    internal.UnsupportedKey(reason) -> UnsupportedKey(reason)
+    internal.ParseError(message) -> ParseError(message)
+    internal.UserPresenceFailed -> UserPresenceFailed
+    internal.UserVerificationFailed -> UserVerificationFailed
+    internal.SignatureVerificationFailed -> InvalidSignature
+  }
 }

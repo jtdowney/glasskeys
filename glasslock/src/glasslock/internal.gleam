@@ -59,6 +59,15 @@ pub type ClientData {
   )
 }
 
+pub type Error {
+  VerificationMismatch(field: glasslock.VerificationField)
+  UnsupportedKey(reason: String)
+  ParseError(message: String)
+  UserPresenceFailed
+  UserVerificationFailed
+  SignatureVerificationFailed
+}
+
 pub type RegistrationAuthData {
   RegistrationAuthData(
     rp_id_hash: BitArray,
@@ -89,7 +98,7 @@ type AuthenticatorHeader {
 
 pub fn extract_attestation_fields(
   cbor: cbor.Cbor,
-) -> Result(#(BitArray, cbor.Cbor, String), glasslock.Error) {
+) -> Result(#(BitArray, cbor.Cbor, String), Error) {
   case cbor {
     cbor.Map(entries) -> {
       use auth_data <- result.try(get_cbor_bytes(entries, "authData"))
@@ -97,75 +106,65 @@ pub fn extract_attestation_fields(
       use fmt <- result.try(get_cbor_string(entries, "fmt"))
       Ok(#(auth_data, att_stmt, fmt))
     }
-    _ -> Error(glasslock.ParseError("Attestation object must be a map"))
+    _ -> Error(ParseError("Attestation object must be a map"))
   }
 }
 
-pub fn parse_attestation_object(
-  data: BitArray,
-) -> Result(cbor.Cbor, glasslock.Error) {
+pub fn parse_attestation_object(data: BitArray) -> Result(cbor.Cbor, Error) {
   cbor.decode_all(data)
+  |> result.map_error(ParseError)
 }
 
-pub fn verify_attestation(
-  statement: cbor.Cbor,
-) -> Result(Nil, glasslock.Error) {
+pub fn verify_attestation(statement: cbor.Cbor) -> Result(Nil, String) {
   case statement {
     cbor.Map([]) -> Ok(Nil)
-    _ ->
-      Error(glasslock.InvalidAttestation(
-        "none attestation with non-empty statement",
-      ))
+    _ -> Error("none attestation with non-empty statement")
   }
 }
 
 fn find_string_entry(
   entries: List(#(cbor.Cbor, cbor.Cbor)),
   key: String,
-) -> Result(cbor.Cbor, glasslock.Error) {
+) -> Result(cbor.Cbor, Error) {
   list.key_find(entries, cbor.String(key))
-  |> result.replace_error(glasslock.ParseError("Missing field: " <> key))
+  |> result.replace_error(ParseError("Missing field: " <> key))
 }
 
 fn get_cbor_bytes(
   entries: List(#(cbor.Cbor, cbor.Cbor)),
   key: String,
-) -> Result(BitArray, glasslock.Error) {
+) -> Result(BitArray, Error) {
   use v <- result.try(find_string_entry(entries, key))
   case v {
     cbor.Bytes(bytes) -> Ok(bytes)
-    _ -> Error(glasslock.ParseError("Field not bytes: " <> key))
+    _ -> Error(ParseError("Field not bytes: " <> key))
   }
 }
 
 fn get_cbor_string(
   entries: List(#(cbor.Cbor, cbor.Cbor)),
   key: String,
-) -> Result(String, glasslock.Error) {
+) -> Result(String, Error) {
   use v <- result.try(find_string_entry(entries, key))
   case v {
     cbor.String(s) -> Ok(s)
-    _ -> Error(glasslock.ParseError("Field not string: " <> key))
+    _ -> Error(ParseError("Field not string: " <> key))
   }
 }
 
 pub fn parse_authentication_auth_data(
   data: BitArray,
-) -> Result(AuthenticationAuthData, glasslock.Error) {
+) -> Result(AuthenticationAuthData, Error) {
   use header <- result.try(parse_authenticator_header(data))
 
   use <- bool.guard(
     when: header.flags.has_attested_credential,
-    return: Error(glasslock.ParseError(
-      "AT flag should not be set in authentication",
-    )),
+    return: Error(ParseError("AT flag should not be set in authentication")),
   )
 
   use <- bool.guard(
     when: !header.flags.has_extensions && bit_array.byte_size(header.rest) > 0,
-    return: Error(glasslock.ParseError(
-      "Unexpected trailing bytes in authenticator data",
-    )),
+    return: Error(ParseError("Unexpected trailing bytes in authenticator data")),
   )
 
   Ok(AuthenticationAuthData(
@@ -178,12 +177,12 @@ pub fn parse_authentication_auth_data(
 
 pub fn parse_registration_auth_data(
   data: BitArray,
-) -> Result(RegistrationAuthData, glasslock.Error) {
+) -> Result(RegistrationAuthData, Error) {
   use header <- result.try(parse_authenticator_header(data))
 
   use <- bool.guard(
     when: !header.flags.has_attested_credential,
-    return: Error(glasslock.ParseError("No attested credential in registration")),
+    return: Error(ParseError("No attested credential in registration")),
   )
 
   parse_attested_credential(header.rest, header.flags.has_extensions)
@@ -201,7 +200,7 @@ pub fn parse_registration_auth_data(
 fn parse_attested_credential(
   data: BitArray,
   has_extensions: Bool,
-) -> Result(AttestedCredential, glasslock.Error) {
+) -> Result(AttestedCredential, Error) {
   case data {
     <<aaguid:bytes-size(16), cred_id_len:16-big-unsigned, rest:bytes>> ->
       case rest {
@@ -216,15 +215,15 @@ fn parse_attested_credential(
             public_key_cbor:,
           ))
         }
-        _ -> Error(glasslock.ParseError("Invalid attested credential data"))
+        _ -> Error(ParseError("Invalid attested credential data"))
       }
-    _ -> Error(glasslock.ParseError("Missing attested credential data"))
+    _ -> Error(ParseError("Missing attested credential data"))
   }
 }
 
 fn parse_authenticator_header(
   data: BitArray,
-) -> Result(AuthenticatorHeader, glasslock.Error) {
+) -> Result(AuthenticatorHeader, Error) {
   case data {
     <<
       rp_id_hash:bytes-size(32),
@@ -238,7 +237,7 @@ fn parse_authenticator_header(
         sign_count:,
         rest:,
       ))
-    _ -> Error(glasslock.ParseError("Authenticator data too short"))
+    _ -> Error(ParseError("Authenticator data too short"))
   }
 }
 
@@ -254,16 +253,17 @@ fn parse_flags(flags_byte: Int) -> AuthenticatorFlags {
 fn split_cose_key(
   data: BitArray,
   has_extensions: Bool,
-) -> Result(BitArray, glasslock.Error) {
+) -> Result(BitArray, Error) {
   case has_extensions {
     False -> Ok(data)
     True -> {
-      use #(_, remaining) <- result.try(cbor.decode(data))
+      use #(_, remaining) <- result.try(
+        cbor.decode(data)
+        |> result.map_error(ParseError),
+      )
       let key_len = bit_array.byte_size(data) - bit_array.byte_size(remaining)
       bit_array.slice(data, at: 0, take: key_len)
-      |> result.replace_error(glasslock.ParseError(
-        "Invalid attested credential data",
-      ))
+      |> result.replace_error(ParseError("Invalid attested credential data"))
     }
   }
 }
@@ -271,17 +271,15 @@ fn split_cose_key(
 pub fn decode_base64url(
   encoded: String,
   field_name: String,
-) -> Result(BitArray, glasslock.Error) {
+) -> Result(BitArray, Error) {
   bit_array.base64_url_decode(encoded)
-  |> result.replace_error(glasslock.ParseError(
-    "Invalid base64url in " <> field_name,
-  ))
+  |> result.replace_error(ParseError("Invalid base64url in " <> field_name))
 }
 
 pub fn decode_optional_base64url(
   value: Option(String),
   field_name: String,
-) -> Result(Option(BitArray), glasslock.Error) {
+) -> Result(Option(BitArray), Error) {
   case value {
     option.None -> Ok(option.None)
     option.Some(encoded) ->
@@ -290,12 +288,10 @@ pub fn decode_optional_base64url(
   }
 }
 
-pub fn parse_client_data(
-  data: BitArray,
-) -> Result(ClientData, glasslock.Error) {
+pub fn parse_client_data(data: BitArray) -> Result(ClientData, Error) {
   use json_string <- result.try(
     bit_array.to_string(data)
-    |> result.replace_error(glasslock.ParseError("Invalid UTF-8")),
+    |> result.replace_error(ParseError("Invalid UTF-8")),
   )
 
   let decoder = {
@@ -313,11 +309,11 @@ pub fn parse_client_data(
 
   use #(type_, challenge_b64, origin, cross_origin, top_origin) <- result.try(
     json.parse(json_string, decoder)
-    |> result.replace_error(glasslock.ParseError("Invalid JSON structure")),
+    |> result.replace_error(ParseError("Invalid JSON structure")),
   )
 
   bit_array.base64_url_decode(challenge_b64)
-  |> result.replace_error(glasslock.ParseError("Invalid challenge encoding"))
+  |> result.replace_error(ParseError("Invalid challenge encoding"))
   |> result.map(fn(challenge) {
     ClientData(type_:, challenge:, origin:, cross_origin:, top_origin:)
   })
@@ -325,7 +321,7 @@ pub fn parse_client_data(
 
 pub fn parse_public_key(
   cbor_bytes: BitArray,
-) -> Result(#(cose.Key, gose.DigitalSignatureAlg), glasslock.Error) {
+) -> Result(#(cose.Key, gose.DigitalSignatureAlg), Error) {
   use parsed_key <- result.try(
     cose.key_from_cbor(cbor_bytes)
     |> result.map_error(map_gose_error),
@@ -336,15 +332,11 @@ pub fn parse_public_key(
 
 fn extract_signature_alg(
   key: cose.Key,
-) -> Result(gose.DigitalSignatureAlg, glasslock.Error) {
+) -> Result(gose.DigitalSignatureAlg, Error) {
   case gose.alg(key) {
     Ok(gose.SigningAlg(gose.DigitalSignature(sig_alg))) -> Ok(sig_alg)
-    Ok(_) ->
-      Error(glasslock.UnsupportedKey(
-        "key algorithm is not a signature algorithm",
-      ))
-    Error(_) ->
-      Error(glasslock.UnsupportedKey("COSE key missing algorithm (label 3)"))
+    Ok(_) -> Error(UnsupportedKey("key algorithm is not a signature algorithm"))
+    Error(_) -> Error(UnsupportedKey("COSE key missing algorithm (label 3)"))
   }
 }
 
@@ -353,7 +345,7 @@ pub fn verify_signature(
   alg alg: gose.DigitalSignatureAlg,
   message message: BitArray,
   signature signature: BitArray,
-) -> Result(Nil, glasslock.Error) {
+) -> Result(Nil, Error) {
   use public_portion <- result.try(
     gose.public_key(key)
     |> result.map_error(map_gose_error),
@@ -385,7 +377,7 @@ pub fn verify_signature(
   }
   case valid {
     True -> Ok(Nil)
-    False -> Error(glasslock.InvalidSignature)
+    False -> Error(SignatureVerificationFailed)
   }
 }
 
@@ -450,11 +442,11 @@ fn rsa_pss_hash(alg: gose.RsaPssAlg) -> hash.HashAlgorithm {
   }
 }
 
-fn map_gose_error(err: gose.GoseError) -> glasslock.Error {
+fn map_gose_error(err: gose.GoseError) -> Error {
   case err {
-    gose.ParseError(msg) -> glasslock.ParseError(msg)
-    gose.CryptoError(_) | gose.VerificationFailed -> glasslock.InvalidSignature
-    gose.InvalidState(msg) -> glasslock.UnsupportedKey(msg)
+    gose.ParseError(msg) -> ParseError(msg)
+    gose.CryptoError(_) | gose.VerificationFailed -> SignatureVerificationFailed
+    gose.InvalidState(msg) -> UnsupportedKey(msg)
   }
 }
 
@@ -470,12 +462,12 @@ pub fn user_verification_to_string(
 
 fn user_verification_from_string(
   value: String,
-) -> Result(glasslock.UserVerification, glasslock.Error) {
+) -> Result(glasslock.UserVerification, Error) {
   case value {
     "required" -> Ok(glasslock.VerificationRequired)
     "preferred" -> Ok(glasslock.VerificationPreferred)
     "discouraged" -> Ok(glasslock.VerificationDiscouraged)
-    _ -> Error(glasslock.ParseError("Invalid user_verification: " <> value))
+    _ -> Error(ParseError("Invalid user_verification: " <> value))
   }
 }
 
@@ -489,20 +481,20 @@ fn user_presence_to_string(presence: glasslock.UserPresence) -> String {
 
 fn user_presence_from_string(
   value: String,
-) -> Result(glasslock.UserPresence, glasslock.Error) {
+) -> Result(glasslock.UserPresence, Error) {
   case value {
     "required" -> Ok(glasslock.PresenceRequired)
     "preferred" -> Ok(glasslock.PresencePreferred)
     "discouraged" -> Ok(glasslock.PresenceDiscouraged)
-    _ -> Error(glasslock.ParseError("Invalid user_presence: " <> value))
+    _ -> Error(ParseError("Invalid user_presence: " <> value))
   }
 }
 
-pub fn check_challenge_version(version: Int) -> Result(Nil, glasslock.Error) {
+pub fn check_challenge_version(version: Int) -> Result(Nil, Error) {
   case version {
     1 -> Ok(Nil)
     _ ->
-      Error(glasslock.ParseError(
+      Error(ParseError(
         "Unsupported challenge version: " <> int.to_string(version),
       ))
   }
@@ -511,13 +503,11 @@ pub fn check_challenge_version(version: Int) -> Result(Nil, glasslock.Error) {
 pub fn check_challenge_kind(
   actual: String,
   expected: String,
-) -> Result(Nil, glasslock.Error) {
+) -> Result(Nil, Error) {
   case actual == expected {
     True -> Ok(Nil)
     False ->
-      Error(glasslock.ParseError(
-        "Expected " <> expected <> " challenge, got " <> actual,
-      ))
+      Error(ParseError("Expected " <> expected <> " challenge, got " <> actual))
   }
 }
 
@@ -538,9 +528,7 @@ pub fn encode_challenge_data_fields(
   ]
 }
 
-pub fn challenge_data_decoder() -> decode.Decoder(
-  Result(ChallengeData, glasslock.Error),
-) {
+pub fn challenge_data_decoder() -> decode.Decoder(Result(ChallengeData, Error)) {
   use bytes_b64 <- decode.field("bytes", decode.string)
   use rp_id <- decode.field("rp_id", decode.string)
   use origins <- decode.field("origins", decode.list(decode.string))
@@ -573,7 +561,7 @@ pub fn parse_challenge_shared(
   encoded: String,
   expected_kind expected_kind: String,
   rest_decoder rest_decoder: decode.Decoder(tail),
-) -> Result(#(ChallengeData, tail), glasslock.Error) {
+) -> Result(#(ChallengeData, tail), Error) {
   let envelope_decoder = {
     use version <- decode.field("v", decode.int)
     use kind <- decode.field("kind", decode.string)
@@ -583,7 +571,7 @@ pub fn parse_challenge_shared(
   }
   use #(version, kind, data_result, tail) <- result.try(
     json.parse(encoded, envelope_decoder)
-    |> result.replace_error(glasslock.ParseError("Invalid challenge encoding")),
+    |> result.replace_error(ParseError("Invalid challenge encoding")),
   )
   use _ <- result.try(check_challenge_version(version))
   use _ <- result.try(check_challenge_kind(kind, expected_kind))
@@ -598,33 +586,33 @@ pub fn verify_client_data(
   expected_origins expected_origins: Set(String),
   allow_cross_origin allow_cross_origin: Bool,
   allowed_top_origins allowed_top_origins: List(String),
-) -> Result(Nil, glasslock.Error) {
+) -> Result(Nil, Error) {
   use <- bool.guard(
     when: set.is_empty(expected_origins),
-    return: Error(glasslock.ParseError(
+    return: Error(ParseError(
       "no allowed origins configured; pass a non-empty origins list to request",
     )),
   )
   use <- bool.guard(
     when: client_data.type_ != expected_type,
-    return: Error(glasslock.VerificationMismatch(glasslock.TypeField)),
+    return: Error(VerificationMismatch(glasslock.TypeField)),
   )
   use <- bool.guard(
     when: client_data.challenge != expected_challenge,
-    return: Error(glasslock.VerificationMismatch(glasslock.ChallengeField)),
+    return: Error(VerificationMismatch(glasslock.ChallengeField)),
   )
   use <- bool.guard(
     when: !set.contains(expected_origins, client_data.origin),
-    return: Error(glasslock.VerificationMismatch(glasslock.OriginField)),
+    return: Error(VerificationMismatch(glasslock.OriginField)),
   )
   use <- bool.guard(
     when: client_data.cross_origin && !allow_cross_origin,
-    return: Error(glasslock.VerificationMismatch(glasslock.CrossOriginField)),
+    return: Error(VerificationMismatch(glasslock.CrossOriginField)),
   )
   use <- bool.guard(
     when: client_data.cross_origin
       && !top_origin_allowed(client_data.top_origin, allowed_top_origins),
-    return: Error(glasslock.VerificationMismatch(glasslock.TopOriginField)),
+    return: Error(VerificationMismatch(glasslock.TopOriginField)),
   )
   Ok(Nil)
 }
@@ -642,14 +630,14 @@ fn top_origin_allowed(
 pub fn verify_rp_id(
   actual_hash: BitArray,
   expected_rp_id: String,
-) -> Result(Nil, glasslock.Error) {
+) -> Result(Nil, Error) {
   use expected_hash <- result.try(
     crypto.hash(hash.Sha256, bit_array.from_string(expected_rp_id))
-    |> result.replace_error(glasslock.ParseError("Failed to hash RP ID")),
+    |> result.replace_error(ParseError("Failed to hash RP ID")),
   )
   use <- bool.guard(
     when: actual_hash != expected_hash,
-    return: Error(glasslock.VerificationMismatch(glasslock.RelyingPartyIdField)),
+    return: Error(VerificationMismatch(glasslock.RelyingPartyIdField)),
   )
   Ok(Nil)
 }
@@ -659,7 +647,7 @@ pub fn verify_user_policies(
   user_verified: Bool,
   presence: glasslock.UserPresence,
   verification: glasslock.UserVerification,
-) -> Result(Nil, glasslock.Error) {
+) -> Result(Nil, Error) {
   let verification_ok = case verification {
     glasslock.VerificationRequired -> user_verified
     glasslock.VerificationPreferred -> True
@@ -667,7 +655,7 @@ pub fn verify_user_policies(
   }
   use <- bool.guard(
     when: !verification_ok,
-    return: Error(glasslock.UserVerificationFailed),
+    return: Error(UserVerificationFailed),
   )
 
   let presence_ok = case presence {
@@ -675,10 +663,7 @@ pub fn verify_user_policies(
     glasslock.PresencePreferred -> True
     glasslock.PresenceDiscouraged -> True
   }
-  use <- bool.guard(
-    when: !presence_ok,
-    return: Error(glasslock.UserPresenceFailed),
-  )
+  use <- bool.guard(when: !presence_ok, return: Error(UserPresenceFailed))
 
   Ok(Nil)
 }

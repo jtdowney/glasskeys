@@ -107,30 +107,30 @@ fn clear_session(response: wisp.Response, req: wisp.Request) -> wisp.Response {
   wisp.set_cookie(response, req, session_cookie, "", wisp.PlainText, 0)
 }
 
-fn describe_error(err: glasslock.Error) -> String {
+fn describe_error(err: authentication.Error) -> String {
   case err {
-    glasslock.VerificationMismatch(glasslock.TypeField) -> "type mismatch"
-    glasslock.VerificationMismatch(glasslock.ChallengeField) ->
+    authentication.VerificationMismatch(glasslock.TypeField) -> "type mismatch"
+    authentication.VerificationMismatch(glasslock.ChallengeField) ->
       "challenge mismatch"
-    glasslock.VerificationMismatch(glasslock.OriginField) -> "origin mismatch"
-    glasslock.VerificationMismatch(glasslock.RelyingPartyIdField) ->
+    authentication.VerificationMismatch(glasslock.OriginField) ->
+      "origin mismatch"
+    authentication.VerificationMismatch(glasslock.RelyingPartyIdField) ->
       "relying party id mismatch"
-    glasslock.VerificationMismatch(glasslock.CrossOriginField) ->
+    authentication.VerificationMismatch(glasslock.CrossOriginField) ->
       "cross origin not allowed"
-    glasslock.VerificationMismatch(glasslock.TopOriginField) ->
+    authentication.VerificationMismatch(glasslock.TopOriginField) ->
       "top origin not allowed"
-    glasslock.VerificationMismatch(glasslock.CredentialIdField) ->
+    authentication.VerificationMismatch(glasslock.CredentialIdField) ->
       "credential id mismatch"
-    glasslock.VerificationMismatch(glasslock.CredentialTypeField) ->
+    authentication.VerificationMismatch(glasslock.CredentialTypeField) ->
       "credential type mismatch"
-    glasslock.UnsupportedKey(reason) -> "unsupported key: " <> reason
-    glasslock.ParseError(message) -> "parse error: " <> message
-    glasslock.InvalidAttestation(reason) -> "invalid attestation: " <> reason
-    glasslock.InvalidSignature -> "invalid signature"
-    glasslock.CredentialNotAllowed -> "credential not allowed"
-    glasslock.SignCountRegression -> "sign count regression"
-    glasslock.UserPresenceFailed -> "user presence failed"
-    glasslock.UserVerificationFailed -> "user verification failed"
+    authentication.UnsupportedKey(reason) -> "unsupported key: " <> reason
+    authentication.ParseError(message) -> "parse error: " <> message
+    authentication.InvalidSignature -> "invalid signature"
+    authentication.CredentialNotAllowed -> "credential not allowed"
+    authentication.SignCountRegression -> "sign count regression"
+    authentication.UserPresenceFailed -> "user presence failed"
+    authentication.UserVerificationFailed -> "user verification failed"
   }
 }
 

@@ -196,7 +196,7 @@ pub fn verify_rejects_invalid_json_test() {
   let challenge = setup_challenge()
   let result = registration.verify(response_json: "{not valid json", challenge:)
   assert result
-    == Error(glasslock.ParseError("Invalid registration response JSON"))
+    == Error(registration.ParseError("Invalid registration response JSON"))
 }
 
 pub fn verify_rejects_wrong_type_test() {
@@ -220,7 +220,7 @@ pub fn verify_rejects_wrong_type_test() {
     )
 
   let result = registration.verify(response_json:, challenge:)
-  assert result == Error(glasslock.VerificationMismatch(glasslock.TypeField))
+  assert result == Error(registration.VerificationMismatch(glasslock.TypeField))
 }
 
 pub fn verify_rejects_challenge_mismatch_test() {
@@ -243,7 +243,7 @@ pub fn verify_rejects_challenge_mismatch_test() {
 
   let result = registration.verify(response_json:, challenge:)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.ChallengeField))
+    == Error(registration.VerificationMismatch(glasslock.ChallengeField))
 }
 
 pub fn verify_rejects_origin_mismatch_test() {
@@ -265,7 +265,8 @@ pub fn verify_rejects_origin_mismatch_test() {
     )
 
   let result = registration.verify(response_json:, challenge:)
-  assert result == Error(glasslock.VerificationMismatch(glasslock.OriginField))
+  assert result
+    == Error(registration.VerificationMismatch(glasslock.OriginField))
 }
 
 pub fn verify_rejects_when_verification_required_but_not_performed_test() {
@@ -280,7 +281,7 @@ pub fn verify_rejects_when_verification_required_but_not_performed_test() {
       ),
     )
   let result = registration.verify(response_json:, challenge:)
-  assert result == Error(glasslock.UserVerificationFailed)
+  assert result == Error(registration.UserVerificationFailed)
 }
 
 pub fn verify_succeeds_when_verification_required_and_performed_test() {
@@ -306,7 +307,7 @@ pub fn verify_rejects_user_presence_not_asserted_test() {
       ),
     )
   let result = registration.verify(response_json:, challenge:)
-  assert result == Error(glasslock.UserPresenceFailed)
+  assert result == Error(registration.UserPresenceFailed)
 }
 
 pub fn verify_rejects_rp_id_mismatch_test() {
@@ -338,7 +339,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
 
   let result = registration.verify(response_json:, challenge:)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.RelyingPartyIdField))
+    == Error(registration.VerificationMismatch(glasslock.RelyingPartyIdField))
 }
 
 pub fn verify_rejects_cross_origin_when_disabled_test() {
@@ -361,7 +362,7 @@ pub fn verify_rejects_cross_origin_when_disabled_test() {
 
   let result = registration.verify(response_json:, challenge:)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.CrossOriginField))
+    == Error(registration.VerificationMismatch(glasslock.CrossOriginField))
 }
 
 pub fn verify_succeeds_with_cross_origin_allowed_test() {
@@ -404,7 +405,7 @@ pub fn verify_rejects_invalid_credential_type_test() {
 
   let result = registration.verify(response_json:, challenge:)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.CredentialTypeField))
+    == Error(registration.VerificationMismatch(glasslock.CredentialTypeField))
 }
 
 fn algorithm_generator() -> qcheck.Generator(registration.Algorithm) {
@@ -506,7 +507,7 @@ pub fn decode_rejects_authentication_blob_test() {
 
   let result = registration.parse_challenge(encoded)
   assert result
-    == Error(glasslock.ParseError(
+    == Error(registration.ParseError(
       "Expected registration challenge, got authentication",
     ))
 }
@@ -529,7 +530,7 @@ pub fn decode_rejects_unknown_version_test() {
 
   let result = registration.parse_challenge(blob)
   assert result
-    == Error(glasslock.ParseError("Unsupported challenge version: 99"))
+    == Error(registration.ParseError("Unsupported challenge version: 99"))
 }
 
 fn setup_options(uv: glasslock.UserVerification) -> registration.Options {

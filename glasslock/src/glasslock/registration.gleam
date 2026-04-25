@@ -136,6 +136,24 @@ pub type User {
   User(id: BitArray, name: String, display_name: String)
 }
 
+/// Errors that can occur during registration verification.
+pub type Error {
+  /// A verification field does not match the expected value.
+  VerificationMismatch(field: glasslock.VerificationField)
+  /// The key format, algorithm, or curve is not supported.
+  UnsupportedKey(reason: String)
+  /// Failed to parse data (CBOR, JSON, or authenticator data).
+  ParseError(message: String)
+  /// The attestation format or statement is invalid.
+  InvalidAttestation(reason: String)
+  /// The cryptographic signature verification failed.
+  InvalidSignature
+  /// User presence was required but not asserted by the authenticator.
+  UserPresenceFailed
+  /// User verification was required but not performed by the authenticator.
+  UserVerificationFailed
+}
+
 /// A finalized registration challenge ready for verification.
 pub opaque type Challenge {
   Challenge(data: internal.ChallengeData, algorithms: List(Algorithm))
@@ -185,17 +203,20 @@ pub fn challenge_data(challenge: Challenge) -> internal.ChallengeData {
 /// Decode a previously-encoded registration challenge. Returns a
 /// `ParseError` if the blob is malformed, encodes an authentication
 /// challenge, or uses an unsupported format version.
-pub fn parse_challenge(encoded: String) -> Result(Challenge, glasslock.Error) {
+pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
   let decoder = {
     use algs <- decode.optional_field("algorithms", [], decode.list(decode.int))
     decode.success(algs)
   }
 
-  use #(data, cose_algs) <- result.try(internal.parse_challenge_shared(
-    encoded,
-    expected_kind: "registration",
-    rest_decoder: decoder,
-  ))
+  use #(data, cose_algs) <- result.try(
+    internal.parse_challenge_shared(
+      encoded,
+      expected_kind: "registration",
+      rest_decoder: decoder,
+    )
+    |> result.map_error(internal_error_to_registration_error),
+  )
   use algorithms <- result.try(list.try_map(cose_algs, algorithm_from_cose))
   Ok(Challenge(data:, algorithms:))
 }
@@ -315,15 +336,12 @@ fn algorithm_to_cose(alg: Algorithm) -> Int {
   }
 }
 
-fn algorithm_from_cose(cose_alg: Int) -> Result(Algorithm, glasslock.Error) {
+fn algorithm_from_cose(cose_alg: Int) -> Result(Algorithm, Error) {
   case cose_alg {
     -7 -> Ok(Es256)
     -8 -> Ok(Ed25519)
     -257 -> Ok(Rs256)
-    _ ->
-      Error(glasslock.ParseError(
-        "Unsupported algorithm: " <> int.to_string(cose_alg),
-      ))
+    _ -> Error(ParseError("Unsupported algorithm: " <> int.to_string(cose_alg)))
   }
 }
 
@@ -382,81 +400,96 @@ fn resident_key_to_string(resident_key: ResidentKey) -> String {
 pub fn verify(
   response_json response_json: String,
   challenge challenge: Challenge,
-) -> Result(glasslock.Credential, glasslock.Error) {
+) -> Result(glasslock.Credential, Error) {
   use response <- result.try(parse_response_json(response_json))
 
-  use client_data_json <- result.try(internal.decode_base64url(
-    response.client_data_json,
-    "clientDataJSON",
-  ))
-  use attestation_object <- result.try(internal.decode_base64url(
-    response.attestation_object,
-    "attestationObject",
-  ))
+  use client_data_json <- result.try(
+    internal.decode_base64url(response.client_data_json, "clientDataJSON")
+    |> result.map_error(internal_error_to_registration_error),
+  )
+  use attestation_object <- result.try(
+    internal.decode_base64url(response.attestation_object, "attestationObject")
+    |> result.map_error(internal_error_to_registration_error),
+  )
 
   use <- bool.guard(
     when: response.credential_type != "public-key",
-    return: Error(glasslock.VerificationMismatch(glasslock.CredentialTypeField)),
+    return: Error(VerificationMismatch(glasslock.CredentialTypeField)),
   )
 
-  use client_data <- result.try(internal.parse_client_data(client_data_json))
-  use _ <- result.try(internal.verify_client_data(
-    client_data,
-    expected_type: "webauthn.create",
-    expected_challenge: challenge.data.bytes,
-    expected_origins: challenge.data.origins,
-    allow_cross_origin: challenge.data.allow_cross_origin,
-    allowed_top_origins: challenge.data.allowed_top_origins,
-  ))
+  use client_data <- result.try(
+    internal.parse_client_data(client_data_json)
+    |> result.map_error(internal_error_to_registration_error),
+  )
+  use _ <- result.try(
+    internal.verify_client_data(
+      client_data,
+      expected_type: "webauthn.create",
+      expected_challenge: challenge.data.bytes,
+      expected_origins: challenge.data.origins,
+      allow_cross_origin: challenge.data.allow_cross_origin,
+      allowed_top_origins: challenge.data.allowed_top_origins,
+    )
+    |> result.map_error(internal_error_to_registration_error),
+  )
 
-  use attestation_obj <- result.try(internal.parse_attestation_object(
-    attestation_object,
-  ))
+  use attestation_obj <- result.try(
+    internal.parse_attestation_object(attestation_object)
+    |> result.map_error(internal_error_to_registration_error),
+  )
   use #(auth_data_bytes, att_stmt, fmt_string) <- result.try(
-    internal.extract_attestation_fields(attestation_obj),
+    internal.extract_attestation_fields(attestation_obj)
+    |> result.map_error(internal_error_to_registration_error),
   )
   use <- bool.guard(
     when: fmt_string != "none",
-    return: Error(glasslock.InvalidAttestation(
-      "unsupported format: " <> fmt_string,
-    )),
+    return: Error(InvalidAttestation("unsupported format: " <> fmt_string)),
   )
-  use auth_data <- result.try(internal.parse_registration_auth_data(
-    auth_data_bytes,
-  ))
+  use auth_data <- result.try(
+    internal.parse_registration_auth_data(auth_data_bytes)
+    |> result.map_error(internal_error_to_registration_error),
+  )
 
-  use _ <- result.try(internal.verify_rp_id(
-    auth_data.rp_id_hash,
-    challenge.data.rp_id,
-  ))
-  use _ <- result.try(internal.verify_user_policies(
-    auth_data.user_present,
-    auth_data.user_verified,
-    challenge.data.user_presence,
-    challenge.data.user_verification,
-  ))
+  use _ <- result.try(
+    internal.verify_rp_id(auth_data.rp_id_hash, challenge.data.rp_id)
+    |> result.map_error(internal_error_to_registration_error),
+  )
+  use _ <- result.try(
+    internal.verify_user_policies(
+      auth_data.user_present,
+      auth_data.user_verified,
+      challenge.data.user_presence,
+      challenge.data.user_verification,
+    )
+    |> result.map_error(internal_error_to_registration_error),
+  )
 
   let attested = auth_data.attested_credential
 
-  use raw_id <- result.try(internal.decode_base64url(response.raw_id, "rawId"))
+  use raw_id <- result.try(
+    internal.decode_base64url(response.raw_id, "rawId")
+    |> result.map_error(internal_error_to_registration_error),
+  )
   use <- bool.guard(
     when: raw_id != attested.credential_id,
-    return: Error(glasslock.VerificationMismatch(glasslock.CredentialIdField)),
+    return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
 
-  use #(_, alg) <- result.try(internal.parse_public_key(
-    attested.public_key_cbor,
-  ))
+  use #(_, alg) <- result.try(
+    internal.parse_public_key(attested.public_key_cbor)
+    |> result.map_error(internal_error_to_registration_error),
+  )
   use <- bool.guard(
     when: !list.any(challenge.algorithms, fn(a) {
       algorithm_to_signature_alg(a) == alg
     }),
-    return: Error(glasslock.UnsupportedKey(
+    return: Error(UnsupportedKey(
       "credential algorithm does not match requested algorithms",
     )),
   )
 
   internal.verify_attestation(att_stmt)
+  |> result.map_error(InvalidAttestation)
   |> result.replace(glasslock.Credential(
     id: glasslock.CredentialId(attested.credential_id),
     public_key: glasslock.PublicKey(attested.public_key_cbor),
@@ -464,9 +497,7 @@ pub fn verify(
   ))
 }
 
-fn parse_response_json(
-  json_string: String,
-) -> Result(ParsedResponse, glasslock.Error) {
+fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
   let decoder = {
     use raw_id <- decode.field("rawId", decode.string)
     use credential_type <- decode.field("type", decode.string)
@@ -487,7 +518,16 @@ fn parse_response_json(
   }
 
   json.parse(json_string, decoder)
-  |> result.replace_error(glasslock.ParseError(
-    "Invalid registration response JSON",
-  ))
+  |> result.replace_error(ParseError("Invalid registration response JSON"))
+}
+
+fn internal_error_to_registration_error(error: internal.Error) -> Error {
+  case error {
+    internal.VerificationMismatch(field) -> VerificationMismatch(field)
+    internal.UnsupportedKey(reason) -> UnsupportedKey(reason)
+    internal.ParseError(message) -> ParseError(message)
+    internal.UserPresenceFailed -> UserPresenceFailed
+    internal.UserVerificationFailed -> UserVerificationFailed
+    internal.SignatureVerificationFailed -> InvalidSignature
+  }
 }

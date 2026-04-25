@@ -112,25 +112,3 @@ pub type VerificationField {
   /// The top-level credential `type` field was not `"public-key"`.
   CredentialTypeField
 }
-
-/// Errors that can occur during WebAuthn verification.
-pub type Error {
-  /// A verification field does not match the expected value.
-  VerificationMismatch(field: VerificationField)
-  /// The key format, algorithm, or curve is not supported.
-  UnsupportedKey(reason: String)
-  /// Failed to parse data (CBOR, JSON, or authenticator data).
-  ParseError(message: String)
-  /// The attestation format or statement is invalid.
-  InvalidAttestation(reason: String)
-  /// The cryptographic signature verification failed.
-  InvalidSignature
-  /// The credential ID is not in the allowed credentials list.
-  CredentialNotAllowed
-  /// The sign count decreased, indicating a possible cloned authenticator.
-  SignCountRegression
-  /// User presence was required but not asserted by the authenticator.
-  UserPresenceFailed
-  /// User verification was required but not performed by the authenticator.
-  UserVerificationFailed
-}

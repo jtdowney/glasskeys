@@ -1,4 +1,3 @@
-import glasslock
 import glasslock/internal/cbor
 import gleam/bit_array
 import gleam/list
@@ -46,23 +45,21 @@ pub fn decode_partial_returns_remaining_bytes_test() {
 pub fn decode_all_rejects_trailing_bytes_test() {
   let input = <<0x18, 0x2A, 0xFF>>
   assert cbor.decode_all(input)
-    == Error(glasslock.ParseError("Unexpected trailing bytes after CBOR value"))
+    == Error("Unexpected trailing bytes after CBOR value")
 }
 
 pub fn decode_empty_input_test() {
-  assert cbor.decode(<<>>)
-    == Error(glasslock.ParseError("Unexpected end of CBOR input"))
-  assert cbor.decode_all(<<>>)
-    == Error(glasslock.ParseError("Unexpected end of CBOR input"))
+  assert cbor.decode(<<>>) == Error("Unexpected end of CBOR input")
+  assert cbor.decode_all(<<>>) == Error("Unexpected end of CBOR input")
 }
 
 pub fn decode_truncated_input_test() {
   assert cbor.decode(<<0x18>>)
-    == Error(glasslock.ParseError("Truncated CBOR: expected 1 byte argument"))
+    == Error("Truncated CBOR: expected 1 byte argument")
   assert cbor.decode(<<0x19, 0x01>>)
-    == Error(glasslock.ParseError("Truncated CBOR: expected 2 byte argument"))
+    == Error("Truncated CBOR: expected 2 byte argument")
   assert cbor.decode(<<0x43, 0x01, 0x02>>)
-    == Error(glasslock.ParseError("Truncated CBOR byte string"))
+    == Error("Truncated CBOR byte string")
 }
 
 pub fn decode_negative_integers_test() {

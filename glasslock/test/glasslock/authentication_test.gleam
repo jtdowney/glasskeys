@@ -170,7 +170,7 @@ pub fn verify_rejects_invalid_json_test() {
     )
 
   assert result
-    == Error(glasslock.ParseError("Invalid authentication response JSON"))
+    == Error(authentication.ParseError("Invalid authentication response JSON"))
 }
 
 pub fn verify_rejects_wrong_type_test() {
@@ -195,7 +195,8 @@ pub fn verify_rejects_wrong_type_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.VerificationMismatch(glasslock.TypeField))
+  assert result
+    == Error(authentication.VerificationMismatch(glasslock.TypeField))
 }
 
 pub fn verify_rejects_challenge_mismatch_test() {
@@ -219,7 +220,7 @@ pub fn verify_rejects_challenge_mismatch_test() {
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.ChallengeField))
+    == Error(authentication.VerificationMismatch(glasslock.ChallengeField))
 }
 
 pub fn verify_rejects_origin_mismatch_test() {
@@ -242,7 +243,8 @@ pub fn verify_rejects_origin_mismatch_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.VerificationMismatch(glasslock.OriginField))
+  assert result
+    == Error(authentication.VerificationMismatch(glasslock.OriginField))
 }
 
 pub fn verify_rejects_credential_not_allowed_test() {
@@ -266,7 +268,7 @@ pub fn verify_rejects_credential_not_allowed_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.CredentialNotAllowed)
+  assert result == Error(authentication.CredentialNotAllowed)
 }
 
 pub fn verify_rejects_credential_id_mismatch_test() {
@@ -290,7 +292,7 @@ pub fn verify_rejects_credential_id_mismatch_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.CredentialNotAllowed)
+  assert result == Error(authentication.CredentialNotAllowed)
 }
 
 pub fn verify_rejects_invalid_signature_test() {
@@ -309,7 +311,7 @@ pub fn verify_rejects_invalid_signature_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.InvalidSignature)
+  assert result == Error(authentication.InvalidSignature)
 }
 
 pub fn verify_rejects_sign_count_regression_test() {
@@ -329,7 +331,7 @@ pub fn verify_rejects_sign_count_regression_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.SignCountRegression)
+  assert result == Error(authentication.SignCountRegression)
 }
 
 pub fn verify_rejects_sign_count_reset_to_zero_test() {
@@ -349,7 +351,7 @@ pub fn verify_rejects_sign_count_reset_to_zero_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.SignCountRegression)
+  assert result == Error(authentication.SignCountRegression)
 }
 
 pub fn verify_rejects_when_verification_required_but_not_performed_test() {
@@ -375,7 +377,7 @@ pub fn verify_rejects_when_verification_required_but_not_performed_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.UserVerificationFailed)
+  assert result == Error(authentication.UserVerificationFailed)
 }
 
 pub fn verify_succeeds_when_verification_required_and_performed_test() {
@@ -418,7 +420,7 @@ pub fn verify_rejects_user_presence_not_asserted_test() {
 
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
-  assert result == Error(glasslock.UserPresenceFailed)
+  assert result == Error(authentication.UserPresenceFailed)
 }
 
 pub fn verify_rejects_rp_id_mismatch_test() {
@@ -455,7 +457,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.RelyingPartyIdField))
+    == Error(authentication.VerificationMismatch(glasslock.RelyingPartyIdField))
 }
 
 pub fn verify_rejects_at_flag_in_authentication_test() {
@@ -494,7 +496,9 @@ pub fn verify_rejects_at_flag_in_authentication_test() {
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
   assert result
-    == Error(glasslock.ParseError("AT flag should not be set in authentication"))
+    == Error(authentication.ParseError(
+      "AT flag should not be set in authentication",
+    ))
 }
 
 pub fn verify_rejects_cross_origin_when_disabled_test() {
@@ -518,7 +522,7 @@ pub fn verify_rejects_cross_origin_when_disabled_test() {
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.CrossOriginField))
+    == Error(authentication.VerificationMismatch(glasslock.CrossOriginField))
 }
 
 pub fn verify_succeeds_with_cross_origin_allowed_test() {
@@ -603,7 +607,7 @@ pub fn verify_rejects_invalid_credential_type_test() {
   let result =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
   assert result
-    == Error(glasslock.VerificationMismatch(glasslock.CredentialTypeField))
+    == Error(authentication.VerificationMismatch(glasslock.CredentialTypeField))
 }
 
 pub fn verify_discoverable_flow_test() {
@@ -681,12 +685,12 @@ pub fn parse_response_errors_on_invalid_user_handle_base64_test() {
     )
 
   assert authentication.parse_response(response_json)
-    == Error(glasslock.ParseError("Invalid base64url in userHandle"))
+    == Error(authentication.ParseError("Invalid base64url in userHandle"))
 }
 
 pub fn parse_response_rejects_invalid_json_test() {
   assert authentication.parse_response("{bad")
-    == Error(glasslock.ParseError("Invalid authentication response JSON"))
+    == Error(authentication.ParseError("Invalid authentication response JSON"))
 }
 
 pub fn sign_count_monotonicity_test() {
@@ -744,7 +748,7 @@ pub fn sign_count_monotonicity_test() {
       Nil
     }
     False -> {
-      assert result == Error(glasslock.SignCountRegression)
+      assert result == Error(authentication.SignCountRegression)
       Nil
     }
   }
@@ -856,7 +860,7 @@ pub fn decode_rejects_registration_blob_test() {
 
   let result = authentication.parse_challenge(encoded)
   assert result
-    == Error(glasslock.ParseError(
+    == Error(authentication.ParseError(
       "Expected authentication challenge, got registration",
     ))
 }
@@ -879,7 +883,7 @@ pub fn decode_rejects_unknown_version_test() {
 
   let result = authentication.parse_challenge(blob)
   assert result
-    == Error(glasslock.ParseError("Unsupported challenge version: 99"))
+    == Error(authentication.ParseError("Unsupported challenge version: 99"))
 }
 
 fn default_auth_setup() -> AuthSetup {
