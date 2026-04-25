@@ -346,7 +346,6 @@ fn glasskey_error_to_string(error: glasskey.Error) -> String {
     glasskey.NotAllowed -> "Operation was not allowed or was cancelled"
     glasskey.Aborted -> "Operation was aborted"
     glasskey.SecurityError -> "Security error occurred"
-    glasskey.EncodingError(message) -> "Encoding error: " <> message
     glasskey.UnknownError(message) -> "Unknown error: " <> message
   }
 }

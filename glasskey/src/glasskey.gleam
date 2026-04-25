@@ -118,8 +118,6 @@ pub type Error {
   Aborted
   /// The relying party ID is invalid for this origin.
   SecurityError
-  /// The options JSON could not be parsed or decoded.
-  EncodingError(String)
   /// An unexpected error from the browser API.
   UnknownError(String)
 }

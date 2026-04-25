@@ -84,7 +84,6 @@ use available <- promise.await(glasskey.supports_webauthn_autofill())
 | `NotAllowed`         | User cancelled or timed out                        |
 | `Aborted`            | Operation was aborted                              |
 | `SecurityError`      | Security policy violation (e.g., non-HTTPS origin) |
-| `EncodingError(msg)` | Invalid options JSON                               |
 | `UnknownError(msg)`  | Unexpected browser error                           |
 
 ## How It Works
