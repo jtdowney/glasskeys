@@ -91,7 +91,10 @@ fn decode_map_entries(
   }
 }
 
-fn decode_text(length: Int, rest: BitArray) -> Result(#(Cbor, BitArray), String) {
+fn decode_text(
+  length: Int,
+  rest: BitArray,
+) -> Result(#(Cbor, BitArray), String) {
   case rest {
     <<bytes:bytes-size(length), remaining:bytes>> -> {
       use text <- result.try(

@@ -14,7 +14,7 @@ const session_cookie = "authentication"
 const session_max_age = 300
 
 pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
-  let #(options_json, challenge) =
+  let assert Ok(#(options_json, challenge)) =
     authentication.request(
       relying_party_id: ctx.rp_id,
       origins: ctx.origins,

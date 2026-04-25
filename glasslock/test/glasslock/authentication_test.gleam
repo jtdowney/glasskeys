@@ -13,7 +13,7 @@ import kryptos/hash
 import qcheck
 
 pub fn request_emits_core_fields_test() {
-  let #(options_json, challenge) =
+  let assert Ok(#(options_json, challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],
@@ -41,13 +41,13 @@ pub fn request_emits_core_fields_test() {
 }
 
 pub fn request_produces_unique_challenges_test() {
-  let #(_, challenge1) =
+  let assert Ok(#(_, challenge1)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],
       options: authentication.default_options(),
     )
-  let #(_, challenge2) =
+  let assert Ok(#(_, challenge2)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],
@@ -60,7 +60,7 @@ pub fn request_produces_unique_challenges_test() {
 pub fn request_with_allow_credentials_test() {
   let cred1 = <<1, 2, 3, 4>>
   let cred2 = <<5, 6, 7, 8>>
-  let #(options_json, _) =
+  let assert Ok(#(options_json, _)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],
@@ -103,7 +103,7 @@ pub fn request_user_verification_variants_test() {
 
   list.each(variants, fn(pair) {
     let #(variant, expected_string) = pair
-    let #(options_json, _) =
+    let assert Ok(#(options_json, _)) =
       authentication.request(
         relying_party_id: "example.com",
         origins: ["https://example.com"],
@@ -115,6 +115,17 @@ pub fn request_user_verification_variants_test() {
     let assert Ok(uv) = json.parse(json.to_string(options_json), decoder)
     assert uv == expected_string
   })
+}
+
+pub fn request_rejects_empty_origins_test() {
+  let result =
+    authentication.request(
+      relying_party_id: "example.com",
+      origins: [],
+      options: authentication.default_options(),
+    )
+
+  let assert Error(authentication.ParseError(_)) = result
 }
 
 pub fn verify_valid_authentication_test() {
@@ -713,7 +724,7 @@ pub fn sign_count_monotonicity_test() {
       sign_count: stored,
     )
 
-  let #(_, challenge) =
+  let assert Ok(#(_, challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],
@@ -767,7 +778,7 @@ type AuthSetup {
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
   let cred_a = glasslock.CredentialId(<<1, 2, 3, 4>>)
   let cred_b = glasslock.CredentialId(<<5, 6, 7, 8>>)
-  let #(_, challenge) =
+  let assert Ok(#(_, challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com", "https://alt.example.com"],
@@ -799,7 +810,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
 pub fn decoded_challenge_drives_verify_test() {
   let cred_a = glasslock.CredentialId(<<1, 2, 3, 4>>)
   let cred_b = glasslock.CredentialId(<<5, 6, 7, 8>>)
-  let #(_, challenge) =
+  let assert Ok(#(_, challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com", "https://alt.example.com"],
@@ -919,7 +930,7 @@ fn setup_authentication_with(
     option.None -> [glasslock.CredentialId(credential_id)]
     option.Some(ids) -> ids
   }
-  let #(_, challenge) =
+  let assert Ok(#(_, challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],

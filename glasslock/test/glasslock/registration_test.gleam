@@ -558,7 +558,7 @@ pub fn decoded_challenge_drives_verify_test() {
 }
 
 pub fn decode_rejects_authentication_blob_test() {
-  let #(_, auth_challenge) =
+  let assert Ok(#(_, auth_challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],

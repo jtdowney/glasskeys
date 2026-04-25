@@ -50,7 +50,7 @@ import glasslock/authentication
 
 // 1. Generate options to send to the browser
 // (empty allow_credentials is the default — discoverable/passkey flow)
-let #(options_json, challenge) =
+let assert Ok(#(options_json, challenge)) =
   authentication.request(
     relying_party_id: "example.com",
     origins: ["https://example.com"],

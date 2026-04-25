@@ -6,14 +6,15 @@
 //// import glasslock/authentication
 ////
 //// // Generate options for browser
-//// let #(request_json, challenge) = authentication.request(
-////   relying_party_id: "example.com",
-////   origins: ["https://example.com"],
-////   options: authentication.Options(
-////     ..authentication.default_options(),
-////     allow_credentials: [stored_credential.id],
-////   ),
-//// )
+//// let assert Ok(#(request_json, challenge)) =
+////   authentication.request(
+////     relying_party_id: "example.com",
+////     origins: ["https://example.com"],
+////     options: authentication.Options(
+////       ..authentication.default_options(),
+////       allow_credentials: [stored_credential.id],
+////     ),
+////   )
 ////
 //// // Send request_json to browser, receive response_json back. Keep
 //// // `challenge` in memory for a single-node deploy; to span processes
@@ -31,11 +32,12 @@
 ////
 //// ```gleam
 //// // Empty allow_credentials is the default (discoverable flow)
-//// let #(request_json, challenge) = authentication.request(
-////   relying_party_id: "example.com",
-////   origins: ["https://example.com"],
-////   options: authentication.default_options(),
-//// )
+//// let assert Ok(#(request_json, challenge)) =
+////   authentication.request(
+////     relying_party_id: "example.com",
+////     origins: ["https://example.com"],
+////     options: authentication.default_options(),
+////   )
 ////
 //// // Parse response to get credential_id for lookup. As above, keep
 //// // `challenge` in memory for a single node, or round-trip through
@@ -225,7 +227,14 @@ pub fn request(
   relying_party_id relying_party_id: String,
   origins origins: List(String),
   options options: Options,
-) -> #(Json, Challenge) {
+) -> Result(#(Json, Challenge), Error) {
+  use <- bool.guard(
+    when: list.is_empty(origins),
+    return: Error(ParseError(
+      "no allowed origins configured; pass a non-empty origins list to request",
+    )),
+  )
+
   let challenge_bytes = crypto.random_bytes(32)
   let challenge_b64 = bit_array.base64_url_encode(challenge_bytes, False)
 
@@ -262,7 +271,7 @@ pub fn request(
       allowed_credentials: options.allow_credentials,
     )
 
-  #(options_json, challenge)
+  Ok(#(options_json, challenge))
 }
 
 /// Parse response JSON to get credential_id/user_handle for lookup (discoverable flow).

@@ -56,7 +56,7 @@ fn register_then_authenticate(
   assert credential.id == reg_response.credential_id
   assert credential.sign_count == 0
 
-  let #(_, auth_challenge) =
+  let assert Ok(#(_, auth_challenge)) =
     authentication.request(
       relying_party_id: "example.com",
       origins: ["https://example.com"],

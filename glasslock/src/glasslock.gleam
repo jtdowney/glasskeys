@@ -37,7 +37,7 @@
 //// ```gleam
 //// import glasslock/authentication
 ////
-//// let #(request_json, challenge) =
+//// let assert Ok(#(request_json, challenge)) =
 ////   authentication.request(
 ////     relying_party_id: "example.com",
 ////     origins: ["https://example.com"],
