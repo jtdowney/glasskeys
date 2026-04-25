@@ -62,8 +62,11 @@ jobs:
           otp-version: "28"
           gleam-version: ${{ matrix.gleam }}
           rebar3-version: "3"
+      - uses: oven-sh/setup-bun@v2
       - run: gleam deps download
       - run: gleam test
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
 
   example-backend:
     name: example/backend

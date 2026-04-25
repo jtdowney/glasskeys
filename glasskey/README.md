@@ -78,13 +78,13 @@ use available <- promise.await(glasskey.supports_webauthn_autofill())
 
 ## Error Types
 
-| Error                | Meaning                                            |
-| -------------------- | -------------------------------------------------- |
-| `NotSupported`       | WebAuthn not available in this browser             |
-| `NotAllowed`         | User cancelled or timed out                        |
-| `Aborted`            | Operation was aborted                              |
-| `SecurityError`      | Security policy violation (e.g., non-HTTPS origin) |
-| `UnknownError(msg)`  | Unexpected browser error                           |
+| Error               | Meaning                                            |
+| ------------------- | -------------------------------------------------- |
+| `NotSupported`      | WebAuthn not available in this browser             |
+| `NotAllowed`        | User cancelled or timed out                        |
+| `Aborted`           | Operation was aborted                              |
+| `SecurityError`     | Security policy violation (e.g., non-HTTPS origin) |
+| `UnknownError(msg)` | Unexpected browser error                           |
 
 ## How It Works
 

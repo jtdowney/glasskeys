@@ -1,4 +1,3 @@
-import { BitArray$BitArray, Result$Ok, Result$Error } from "./gleam.mjs";
 import {
   Option$Some,
   Option$None,
@@ -12,6 +11,7 @@ import {
   Error$SecurityError,
   Error$UnknownError,
 } from "./glasskey.mjs";
+import { BitArray$BitArray, Result$Ok, Result$Error } from "./gleam.mjs";
 
 export function browserSupportsWebauthn() {
   return (
