@@ -9,13 +9,10 @@ import lustre/event
 pub fn root(m: model.Model) -> Element(model.Msg) {
   html.main([attribute.class("app")], [
     case m {
-      model.Unauthenticated(page: model.HomePage, ..) -> home()
-      model.Unauthenticated(page: model.LoginPage(stage:), status:) ->
-        login(stage, status)
-      model.Unauthenticated(page: model.NotFoundPage(uri:), ..) ->
-        not_found(uri)
-      model.Authenticating(username:, stage:, status:) ->
-        register(username, stage, status)
+      model.Unauthenticated(page: model.HomePage) -> home()
+      model.Unauthenticated(page: model.LoginPage(state:)) -> login(state)
+      model.Unauthenticated(page: model.NotFoundPage(uri:)) -> not_found(uri)
+      model.Registering(state:) -> register(state)
       model.Authenticated(username:) -> welcome(username)
     },
   ])
@@ -40,8 +37,8 @@ fn home() -> Element(model.Msg) {
   ])
 }
 
-fn login(stage: model.LoginStage, status_text: String) -> Element(model.Msg) {
-  let loading = is_login_loading(stage)
+fn login(state: model.LoginState) -> Element(model.Msg) {
+  let loading = is_login_loading(state)
   html.div([], [
     html.h1([], [html.text("Sign In")]),
     html.div([attribute.class("stack")], [
@@ -52,32 +49,39 @@ fn login(stage: model.LoginStage, status_text: String) -> Element(model.Msg) {
         attribute.attribute("autocomplete", "username webauthn"),
       ]),
       html.button(
-        [event.on_click(model.UserClickedLogin), attribute.disabled(loading)],
+        [
+          event.on_click(model.LoginMsg(model.UserClickedLogin)),
+          attribute.disabled(loading),
+        ],
         [html.text("Sign in with passkey")],
       ),
     ]),
-    status(status_text),
+    status(login_status(state)),
     back_link(),
   ])
 }
 
-fn is_login_loading(stage: model.LoginStage) -> Bool {
-  case stage {
+fn is_login_loading(state: model.LoginState) -> Bool {
+  case state {
     model.LoginSettingUpConditional -> False
     model.LoginConditional(..) -> False
-    model.LoginReady -> False
+    model.LoginReady(..) -> False
     model.LoginModalBeginning -> True
     model.LoginModalAwaiting -> True
     model.LoginVerifying -> True
   }
 }
 
-fn register(
-  username: String,
-  stage: model.RegisterStage,
-  status_text: String,
-) -> Element(model.Msg) {
-  let loading = is_register_loading(stage)
+fn login_status(state: model.LoginState) -> String {
+  case state {
+    model.LoginReady(status:) -> status
+    _ -> ""
+  }
+}
+
+fn register(state: model.RegisterState) -> Element(model.Msg) {
+  let loading = is_register_loading(state)
+  let username = model.register_username(state)
   html.div([], [
     html.h1([], [html.text("Register")]),
     html.div([attribute.class("stack")], [
@@ -86,27 +90,36 @@ fn register(
         attribute.placeholder("Username"),
         attribute.value(username),
         attribute.disabled(loading),
-        event.on_input(model.UserTypedUsername),
+        event.on_input(fn(text) {
+          model.RegisterMsg(model.UserTypedUsername(text))
+        }),
       ]),
       html.button(
         [
-          event.on_click(model.UserClickedRegister),
+          event.on_click(model.RegisterMsg(model.UserClickedRegister)),
           attribute.disabled(loading || username == ""),
         ],
         [html.text("Register")],
       ),
     ]),
-    status(status_text),
+    status(register_status(state)),
     back_link(),
   ])
 }
 
-fn is_register_loading(stage: model.RegisterStage) -> Bool {
-  case stage {
-    model.RegisterIdle -> False
-    model.RegisterBeginning -> True
-    model.RegisterAwaitingAuthenticator -> True
-    model.RegisterVerifying -> True
+fn is_register_loading(state: model.RegisterState) -> Bool {
+  case state {
+    model.RegisterIdle(..) -> False
+    model.RegisterBeginning(..) -> True
+    model.RegisterAwaitingAuthenticator(..) -> True
+    model.RegisterVerifying(..) -> True
+  }
+}
+
+fn register_status(state: model.RegisterState) -> String {
+  case state {
+    model.RegisterIdle(status:, ..) -> status
+    _ -> ""
   }
 }
 
