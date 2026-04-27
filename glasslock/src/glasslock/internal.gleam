@@ -566,16 +566,19 @@ pub fn parse_challenge_shared(
     use version <- decode.field("v", decode.int)
     use kind <- decode.field("kind", decode.string)
     use data_result <- decode.then(challenge_data_decoder())
-    use tail <- decode.then(rest_decoder)
-    decode.success(#(version, kind, data_result, tail))
+    decode.success(#(version, kind, data_result))
   }
-  use #(version, kind, data_result, tail) <- result.try(
+  use #(version, kind, data_result) <- result.try(
     json.parse(encoded, envelope_decoder)
     |> result.replace_error(ParseError("Invalid challenge encoding")),
   )
   use _ <- result.try(check_challenge_version(version))
   use _ <- result.try(check_challenge_kind(kind, expected_kind))
   use data <- result.try(data_result)
+  use tail <- result.try(
+    json.parse(encoded, rest_decoder)
+    |> result.replace_error(ParseError("Invalid challenge encoding")),
+  )
   Ok(#(data, tail))
 }
 

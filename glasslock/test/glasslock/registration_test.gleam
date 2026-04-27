@@ -802,6 +802,25 @@ pub fn decode_rejects_unknown_version_test() {
     == Error(registration.ParseError("Unsupported challenge version: 99"))
 }
 
+pub fn decode_rejects_missing_algorithms_test() {
+  let blob =
+    json.object([
+      #("v", json.int(1)),
+      #("kind", json.string("registration")),
+      #("bytes", json.string(bit_array.base64_url_encode(<<0:256>>, False))),
+      #("rp_id", json.string("example.com")),
+      #("origins", json.array(["https://example.com"], json.string)),
+      #("user_verification", json.string("preferred")),
+      #("user_presence", json.string("required")),
+      #("allow_cross_origin", json.bool(False)),
+      #("allowed_top_origins", json.array([], json.string)),
+    ])
+    |> json.to_string
+
+  let result = registration.parse_challenge(blob)
+  let assert Error(registration.ParseError(_)) = result
+}
+
 pub fn request_emits_compat_json_test() {
   let assert Ok(#(options_json, challenge)) =
     registration.request(

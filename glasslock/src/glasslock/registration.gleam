@@ -210,7 +210,7 @@ pub fn challenge_algorithms(challenge: Challenge) -> List(Algorithm) {
 /// challenge, or uses an unsupported format version.
 pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
   let decoder = {
-    use algs <- decode.optional_field("algorithms", [], decode.list(decode.int))
+    use algs <- decode.field("algorithms", decode.list(decode.int))
     decode.success(algs)
   }
 
