@@ -13,7 +13,7 @@ import {
 import {
   CreateSnapshot$CreateSnapshot,
   GetSnapshot$GetSnapshot,
-} from "./glasskey_test_helpers.mjs";
+} from "./support/helpers.mjs";
 
 class FakeDOMException extends Error {
   constructor(message, name) {
