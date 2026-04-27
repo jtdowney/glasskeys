@@ -1,13 +1,15 @@
+import birdie
 import glasslock
 import glasslock/authentication
 import glasslock/registration
 import glasslock/testing
 import gleam/bit_array
 import gleam/dynamic/decode
-import gleam/json
+import gleam/json.{type Json}
 import gleam/list
 import gleam/option
 import gleam/string
+import gleam/time/duration
 import qcheck
 
 pub fn request_emits_core_fields_test() {
@@ -600,7 +602,7 @@ fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
 
 fn make_request(
   options: registration.Options,
-) -> #(json.Json, registration.Challenge) {
+) -> #(Json, registration.Challenge) {
   let assert Ok(request) =
     registration.request(
       relying_party: registration.RelyingParty(
@@ -655,4 +657,50 @@ fn manually_built_response(
     attestation_object: testing.build_attestation_object(auth_data),
     credential_type: "public-key",
   )
+}
+
+pub fn request_emits_compat_json_test() {
+  let assert Ok(#(options_json, challenge)) =
+    registration.request(
+      relying_party: registration.RelyingParty(
+        id: "example.com",
+        name: "Compat Test",
+      ),
+      user: registration.User(
+        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+        name: "alice",
+        display_name: "Alice Example",
+      ),
+      origins: ["https://example.com"],
+      options: registration.Options(
+        timeout: duration.seconds(90),
+        attestation: registration.AttestationDirect,
+        authenticator_attachment: option.Some(registration.CrossPlatform),
+        resident_key: registration.ResidentKeyRequired,
+        user_verification: glasslock.VerificationRequired,
+        user_presence: glasslock.PresenceRequired,
+        allow_cross_origin: False,
+        algorithms: [
+          registration.Es256,
+          registration.Ed25519,
+          registration.Rs256,
+        ],
+        exclude_credentials: [
+          glasslock.CredentialId(<<10, 11, 12>>),
+          glasslock.CredentialId(<<20, 21, 22, 23>>),
+        ],
+        allowed_top_origins: [],
+      ),
+    )
+
+  let challenge_b64 =
+    bit_array.base64_url_encode(
+      testing.registration_challenge_bytes(challenge),
+      False,
+    )
+
+  options_json
+  |> json.to_string
+  |> string.replace(each: challenge_b64, with: "REDACTED_CHALLENGE_BASE64URL")
+  |> birdie.snap("glasslock registration.request emits compat JSON")
 }

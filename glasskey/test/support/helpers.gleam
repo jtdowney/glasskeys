@@ -23,32 +23,32 @@ pub type GetSnapshot {
   )
 }
 
-@external(javascript, "./glasskey_test_ffi.mjs", "installFakeNavigator")
+@external(javascript, "../glasskey_test_ffi.mjs", "installFakeNavigator")
 pub fn install_default_fake_navigator() -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "uninstallFakeNavigator")
+@external(javascript, "../glasskey_test_ffi.mjs", "uninstallFakeNavigator")
 pub fn uninstall_fake_navigator() -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setCreateCredential")
+@external(javascript, "../glasskey_test_ffi.mjs", "setCreateCredential")
 pub fn set_create_credential(
   raw_id raw_id: BitArray,
   client_data_json client_data_json: BitArray,
   attestation_object attestation_object: BitArray,
 ) -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setCreateNull")
+@external(javascript, "../glasskey_test_ffi.mjs", "setCreateNull")
 pub fn set_create_null() -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setCreateDomException")
+@external(javascript, "../glasskey_test_ffi.mjs", "setCreateDomException")
 pub fn set_create_dom_exception(
   name name: String,
   message message: String,
 ) -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setCreatePlainError")
+@external(javascript, "../glasskey_test_ffi.mjs", "setCreatePlainError")
 pub fn set_create_plain_error(message: String) -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setGetCredential")
+@external(javascript, "../glasskey_test_ffi.mjs", "setGetCredential")
 pub fn set_get_credential(
   raw_id raw_id: BitArray,
   client_data_json client_data_json: BitArray,
@@ -57,17 +57,17 @@ pub fn set_get_credential(
   user_handle user_handle: Option(BitArray),
 ) -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setGetNull")
+@external(javascript, "../glasskey_test_ffi.mjs", "setGetNull")
 pub fn set_get_null() -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "setGetDomException")
+@external(javascript, "../glasskey_test_ffi.mjs", "setGetDomException")
 pub fn set_get_dom_exception(name name: String, message message: String) -> Nil
 
-@external(javascript, "./glasskey_test_ffi.mjs", "lastCreateSnapshot")
+@external(javascript, "../glasskey_test_ffi.mjs", "lastCreateSnapshot")
 pub fn last_create_snapshot() -> Result(CreateSnapshot, Nil)
 
-@external(javascript, "./glasskey_test_ffi.mjs", "lastGetSnapshot")
+@external(javascript, "../glasskey_test_ffi.mjs", "lastGetSnapshot")
 pub fn last_get_snapshot() -> Result(GetSnapshot, Nil)
 
-@external(javascript, "./glasskey_test_ffi.mjs", "lastGetSignalAborted")
+@external(javascript, "../glasskey_test_ffi.mjs", "lastGetSignalAborted")
 pub fn last_get_signal_aborted() -> Result(Bool, Nil)

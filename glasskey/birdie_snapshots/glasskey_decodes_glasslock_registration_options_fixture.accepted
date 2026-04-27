@@ -1,0 +1,7 @@
+---
+version: 1.5.5
+title: glasskey decodes glasslock registration options fixture
+file: ./test/glasskey_test.gleam
+test_name: decodes_glasslock_registration_options_test
+---
+RegistrationOptions(challenge: <<116, 101, 115, 116, 45, 99, 104, 97, 108, 108, 101, 110, 103, 101>>, rp_id: "example.com", rp_name: "Compat Test", user_id: <<1, 2, 3, 4, 5, 6, 7, 8>>, user_name: "alice", user_display_name: "Alice Example", algorithms: [Es256, Ed25519, Rs256], timeout: Some(90000), attestation: AttestationDirect, resident_key: Required, user_verification: Required, authenticator_attachment: Some(CrossPlatform), exclude_credentials: [<<10, 11, 12>>, <<20, 21, 22, 23>>])

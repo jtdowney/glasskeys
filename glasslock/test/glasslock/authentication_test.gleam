@@ -1,3 +1,4 @@
+import birdie
 import glasslock
 import glasslock/authentication
 import glasslock/registration
@@ -8,6 +9,7 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/string
+import gleam/time/duration
 import kryptos/crypto
 import kryptos/hash
 import qcheck
@@ -1030,4 +1032,34 @@ fn response_envelope(
     #("clientExtensionResults", json.object([])),
   ])
   |> json.to_string
+}
+
+pub fn request_emits_compat_json_test() {
+  let assert Ok(#(options_json, challenge)) =
+    authentication.request(
+      relying_party_id: "example.com",
+      origins: ["https://example.com"],
+      options: authentication.Options(
+        timeout: duration.seconds(45),
+        user_verification: glasslock.VerificationPreferred,
+        user_presence: glasslock.PresenceRequired,
+        allow_cross_origin: False,
+        allow_credentials: [
+          glasslock.CredentialId(<<30, 31, 32, 33>>),
+          glasslock.CredentialId(<<40, 41, 42>>),
+        ],
+        allowed_top_origins: [],
+      ),
+    )
+
+  let challenge_b64 =
+    bit_array.base64_url_encode(
+      testing.authentication_challenge_bytes(challenge),
+      False,
+    )
+
+  options_json
+  |> json.to_string
+  |> string.replace(each: challenge_b64, with: "REDACTED_CHALLENGE_BASE64URL")
+  |> birdie.snap("glasslock authentication.request emits compat JSON")
 }

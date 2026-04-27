@@ -1,0 +1,7 @@
+---
+version: 1.5.5
+title: glasslock authentication.request emits compat JSON
+file: ./test/glasslock/authentication_test.gleam
+test_name: request_emits_compat_json_test
+---
+{"allowCredentials":[{"id":"Hh8gIQ","type":"public-key"},{"id":"KCkq","type":"public-key"}],"challenge":"REDACTED_CHALLENGE_BASE64URL","rpId":"example.com","timeout":45000,"userVerification":"preferred"}

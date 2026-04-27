@@ -1,5 +1,5 @@
+import birdie
 import glasskey
-import glasskey_test_helpers as helpers
 import gleam/bit_array
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
@@ -7,7 +7,10 @@ import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
 import gleam/option
+import gleam/string
 import qcheck
+import support/fixtures
+import support/helpers
 import unitest
 
 pub fn main() {
@@ -1167,4 +1170,28 @@ pub fn start_conditional_authentication_abort_signals_navigator_test() {
 
   assert helpers.last_get_signal_aborted() == Ok(True)
   promise.resolve(Nil)
+}
+
+pub fn decodes_glasslock_registration_options_test() {
+  let assert Ok(options) =
+    json.parse(
+      fixtures.registration_options_json(),
+      glasskey.registration_options_decoder(),
+    )
+
+  options
+  |> string.inspect
+  |> birdie.snap("glasskey decodes glasslock registration options fixture")
+}
+
+pub fn decodes_glasslock_authentication_options_test() {
+  let assert Ok(options) =
+    json.parse(
+      fixtures.authentication_options_json(),
+      glasskey.authentication_options_decoder(),
+    )
+
+  options
+  |> string.inspect
+  |> birdie.snap("glasskey decodes glasslock authentication options fixture")
 }
