@@ -24,8 +24,8 @@ jobs:
         working-directory: glasskey
         run: gleam format --check src test
 
-  glasslock:
-    name: glasslock (Gleam ${{ matrix.gleam }} / OTP ${{ matrix.otp }})
+  glasslock-erlang:
+    name: glasslock (OTP ${{ matrix.otp }} / Gleam ${{ matrix.gleam }})
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,7 +43,30 @@ jobs:
           gleam-version: ${{ matrix.gleam }}
           rebar3-version: "3"
       - run: gleam deps download
-      - run: gleam test
+      - run: gleam test --target erlang
+
+  glasslock-javascript:
+    name: glasslock (Node ${{ matrix.node }} / Gleam ${{ matrix.gleam }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: glasslock
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24"]
+        gleam: ["1.15", "1.16"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          gleam-version: ${{ matrix.gleam }}
+          rebar3-version: "3"
+      - run: gleam deps download
       - run: gleam test --target javascript
 
   glasskey:
