@@ -35,6 +35,7 @@
   });
 
   async function handleLogin() {
+    WebAuthnAbortService.cancelCeremony();
     busy = true;
     status = "Waiting for authenticator...";
     try {
