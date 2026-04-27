@@ -403,22 +403,11 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
     AttestationNone,
     attestation_decoder(),
   )
-  use resident_key <- decode.subfield(
-    ["authenticatorSelection", "residentKey"],
-    requirement_decoder(),
+  use #(resident_key, user_verification, authenticator_attachment) <- decode.optional_field(
+    "authenticatorSelection",
+    #(Preferred, Preferred, option.None),
+    authenticator_selection_decoder(),
   )
-  use user_verification <- decode.subfield(
-    ["authenticatorSelection", "userVerification"],
-    requirement_decoder(),
-  )
-  use authenticator_attachment <- decode.field("authenticatorSelection", {
-    use attachment <- decode.optional_field(
-      "authenticatorAttachment",
-      option.None,
-      decode.optional(authenticator_attachment_decoder()),
-    )
-    decode.success(attachment)
-  })
   use exclude_credentials <- decode.optional_field(
     "excludeCredentials",
     [],
@@ -464,6 +453,27 @@ fn attestation_decoder() -> decode.Decoder(Attestation) {
       _ -> decode.failure(AttestationNone, "attestation")
     }
   })
+}
+
+fn authenticator_selection_decoder() -> decode.Decoder(
+  #(Requirement, Requirement, Option(AuthenticatorAttachment)),
+) {
+  use resident_key <- decode.optional_field(
+    "residentKey",
+    Preferred,
+    requirement_decoder(),
+  )
+  use user_verification <- decode.optional_field(
+    "userVerification",
+    Preferred,
+    requirement_decoder(),
+  )
+  use authenticator_attachment <- decode.optional_field(
+    "authenticatorAttachment",
+    option.None,
+    decode.optional(authenticator_attachment_decoder()),
+  )
+  decode.success(#(resident_key, user_verification, authenticator_attachment))
 }
 
 fn authenticator_attachment_decoder() -> decode.Decoder(AuthenticatorAttachment) {

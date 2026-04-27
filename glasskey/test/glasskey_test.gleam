@@ -322,6 +322,79 @@ pub fn decode_registration_options_authenticator_attachment_variants_test() {
   })
 }
 
+pub fn decode_registration_options_omits_authenticator_selection_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("rp"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("example.com")),
+          #(dynamic.string("name"), dynamic.string("App")),
+        ]),
+      ),
+      #(
+        dynamic.string("user"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("dQ")),
+          #(dynamic.string("name"), dynamic.string("u")),
+          #(dynamic.string("displayName"), dynamic.string("U")),
+        ]),
+      ),
+      #(
+        dynamic.string("pubKeyCredParams"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("type"), dynamic.string("public-key")),
+            #(dynamic.string("alg"), dynamic.int(-7)),
+          ]),
+        ]),
+      ),
+    ])
+
+  let assert Ok(opt) = decode.run(dyn, glasskey.registration_options_decoder())
+  assert opt.resident_key == glasskey.Preferred
+  assert opt.user_verification == glasskey.Preferred
+  assert opt.authenticator_attachment == option.None
+}
+
+pub fn decode_registration_options_authenticator_selection_inner_defaults_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("rp"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("example.com")),
+          #(dynamic.string("name"), dynamic.string("App")),
+        ]),
+      ),
+      #(
+        dynamic.string("user"),
+        dynamic.properties([
+          #(dynamic.string("id"), dynamic.string("dQ")),
+          #(dynamic.string("name"), dynamic.string("u")),
+          #(dynamic.string("displayName"), dynamic.string("U")),
+        ]),
+      ),
+      #(
+        dynamic.string("pubKeyCredParams"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("type"), dynamic.string("public-key")),
+            #(dynamic.string("alg"), dynamic.int(-7)),
+          ]),
+        ]),
+      ),
+      #(dynamic.string("authenticatorSelection"), dynamic.properties([])),
+    ])
+
+  let assert Ok(opt) = decode.run(dyn, glasskey.registration_options_decoder())
+  assert opt.resident_key == glasskey.Preferred
+  assert opt.user_verification == glasskey.Preferred
+  assert opt.authenticator_attachment == option.None
+}
+
 pub fn decode_registration_options_missing_required_fields_test() {
   let assert Error(_) =
     decode.run(dynamic.properties([]), glasskey.registration_options_decoder())
