@@ -235,6 +235,14 @@ pub fn start_authentication(
 /// Takes options parsed with [`authentication_options_decoder`](#authentication_options_decoder).
 /// Returns synchronously with the ceremony handle or an error. Call `abort`
 /// before starting a modal ceremony or when navigating away.
+///
+/// Conditional mediation is a separate browser capability from WebAuthn
+/// itself. Callers should check
+/// [`supports_webauthn_autofill`](#supports_webauthn_autofill) before
+/// invoking this function. The synchronous `supports_webauthn` guard inside
+/// only catches the absence of WebAuthn entirely; if WebAuthn is present
+/// but conditional mediation is not, the returned `result` promise will
+/// resolve to `Error(NotSupported)` rather than failing synchronously.
 pub fn start_conditional_authentication(
   options: AuthenticationOptions,
 ) -> Result(ConditionalAuthentication, Error) {
