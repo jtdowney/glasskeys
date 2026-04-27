@@ -44,6 +44,7 @@ type AuthSetup {
     stored_sign_count: Int,
     user_verification: glasslock.UserVerification,
     allow_cross_origin: Bool,
+    allowed_top_origins: List(String),
     allow_credentials_override: option.Option(List(glasslock.CredentialId)),
     generate_keypair: fn() -> testing.KeyPair,
   )
@@ -54,6 +55,7 @@ fn default_auth_setup() -> AuthSetup {
     stored_sign_count: 0,
     user_verification: glasslock.VerificationPreferred,
     allow_cross_origin: False,
+    allowed_top_origins: [],
     allow_credentials_override: option.None,
     generate_keypair: testing.generate_es256_keypair,
   )
@@ -91,6 +93,7 @@ fn setup_authentication_with(
         allow_credentials:,
         user_verification: config.user_verification,
         allow_cross_origin: config.allow_cross_origin,
+        allowed_top_origins: config.allowed_top_origins,
       ),
     )
   #(challenge, stored_credential, keypair)
@@ -732,6 +735,104 @@ pub fn verify_succeeds_with_cross_origin_allowed_test() {
   let assert Ok(cred) =
     authentication.verify(response_json:, challenge:, stored: stored_credential)
   assert cred.sign_count == 1
+}
+
+pub fn verify_accepts_allowed_top_origin_test() {
+  let #(challenge, stored_credential, keypair) =
+    setup_authentication_with(
+      AuthSetup(
+        ..default_auth_setup(),
+        allow_cross_origin: True,
+        allowed_top_origins: ["https://top.example.com"],
+      ),
+    )
+
+  let client_data_json =
+    testing.build_client_data(
+      type_: "webauthn.get",
+      challenge: testing.authentication_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: True,
+      top_origin: option.Some("https://top.example.com"),
+    )
+  let response_json =
+    signed_response(
+      challenge:,
+      stored: stored_credential,
+      keypair:,
+      sign_count: 1,
+      client_data_json:,
+    )
+
+  let assert Ok(cred) =
+    authentication.verify(response_json:, challenge:, stored: stored_credential)
+  assert cred.sign_count == 1
+}
+
+pub fn verify_rejects_unknown_top_origin_test() {
+  let #(challenge, stored_credential, keypair) =
+    setup_authentication_with(
+      AuthSetup(
+        ..default_auth_setup(),
+        allow_cross_origin: True,
+        allowed_top_origins: ["https://top.example.com"],
+      ),
+    )
+
+  let client_data_json =
+    testing.build_client_data(
+      type_: "webauthn.get",
+      challenge: testing.authentication_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: True,
+      top_origin: option.Some("https://evil.com"),
+    )
+  let response_json =
+    signed_response(
+      challenge:,
+      stored: stored_credential,
+      keypair:,
+      sign_count: 1,
+      client_data_json:,
+    )
+
+  let result =
+    authentication.verify(response_json:, challenge:, stored: stored_credential)
+  assert result
+    == Error(authentication.VerificationMismatch(glasslock.TopOriginField))
+}
+
+pub fn verify_rejects_missing_top_origin_with_allowlist_test() {
+  let #(challenge, stored_credential, keypair) =
+    setup_authentication_with(
+      AuthSetup(
+        ..default_auth_setup(),
+        allow_cross_origin: True,
+        allowed_top_origins: ["https://top.example.com"],
+      ),
+    )
+
+  let client_data_json =
+    testing.build_client_data(
+      type_: "webauthn.get",
+      challenge: testing.authentication_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: True,
+      top_origin: option.None,
+    )
+  let response_json =
+    signed_response(
+      challenge:,
+      stored: stored_credential,
+      keypair:,
+      sign_count: 1,
+      client_data_json:,
+    )
+
+  let result =
+    authentication.verify(response_json:, challenge:, stored: stored_credential)
+  assert result
+    == Error(authentication.VerificationMismatch(glasslock.TopOriginField))
 }
 
 pub fn verify_sign_count_zero_stored_allows_any_new_test() {
