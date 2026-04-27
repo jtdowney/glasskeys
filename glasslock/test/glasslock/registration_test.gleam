@@ -25,6 +25,20 @@ fn non_empty_list_from(
   qcheck.map2(element, qcheck.list_from(element), fn(x, xs) { [x, ..xs] })
 }
 
+fn user_verification_generator() -> qcheck.Generator(glasslock.UserVerification) {
+  qcheck.from_generators(qcheck.return(glasslock.VerificationRequired), [
+    qcheck.return(glasslock.VerificationPreferred),
+    qcheck.return(glasslock.VerificationDiscouraged),
+  ])
+}
+
+fn user_presence_generator() -> qcheck.Generator(glasslock.UserPresence) {
+  qcheck.from_generators(qcheck.return(glasslock.PresenceRequired), [
+    qcheck.return(glasslock.PresencePreferred),
+    qcheck.return(glasslock.PresenceDiscouraged),
+  ])
+}
+
 fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
   registration.Options(..registration.default_options(), user_verification: uv)
 }
@@ -548,22 +562,31 @@ pub fn verify_rejects_invalid_credential_type_test() {
 }
 
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
-  use inputs <- qcheck.given(qcheck.tuple5(
+  use inputs <- qcheck.given(qcheck.tuple6(
     qcheck.non_empty_string(),
     non_empty_list_from(qcheck.non_empty_string()),
     non_empty_list_from(algorithm_generator()),
     qcheck.list_from(qcheck.non_empty_string()),
     qcheck.bool(),
+    qcheck.tuple2(user_verification_generator(), user_presence_generator()),
   ))
-  let #(rp_id, origins, algorithms, allowed_top_origins, allow_cross_origin) =
-    inputs
+  let #(
+    rp_id,
+    origins,
+    algorithms,
+    allowed_top_origins,
+    allow_cross_origin,
+    #(user_verification, user_presence),
+  ) = inputs
 
   let options =
     registration.Options(
       ..registration.default_options(),
-      allow_cross_origin:,
       algorithms:,
+      allow_cross_origin:,
       allowed_top_origins:,
+      user_verification:,
+      user_presence:,
     )
   let assert Ok(#(_, challenge)) =
     registration.request(
@@ -580,18 +603,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
   let encoded = registration.encode_challenge(challenge)
   let assert Ok(decoded) = registration.parse_challenge(encoded)
 
-  assert testing.registration_challenge_bytes(decoded)
-    == testing.registration_challenge_bytes(challenge)
-  assert testing.registration_challenge_rp_id(decoded)
-    == testing.registration_challenge_rp_id(challenge)
-  assert list.sort(
-      testing.registration_challenge_origins(decoded),
-      string.compare,
-    )
-    == list.sort(
-      testing.registration_challenge_origins(challenge),
-      string.compare,
-    )
+  assert decoded == challenge
 }
 
 pub fn decoded_challenge_drives_verify_test() {

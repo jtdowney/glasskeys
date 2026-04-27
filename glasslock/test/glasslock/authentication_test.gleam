@@ -14,6 +14,30 @@ import kryptos/crypto
 import kryptos/hash
 import qcheck
 
+fn non_empty_list_from(
+  element: qcheck.Generator(a),
+) -> qcheck.Generator(List(a)) {
+  qcheck.map2(element, qcheck.list_from(element), fn(x, xs) { [x, ..xs] })
+}
+
+fn user_verification_generator() -> qcheck.Generator(glasslock.UserVerification) {
+  qcheck.from_generators(qcheck.return(glasslock.VerificationRequired), [
+    qcheck.return(glasslock.VerificationPreferred),
+    qcheck.return(glasslock.VerificationDiscouraged),
+  ])
+}
+
+fn user_presence_generator() -> qcheck.Generator(glasslock.UserPresence) {
+  qcheck.from_generators(qcheck.return(glasslock.PresenceRequired), [
+    qcheck.return(glasslock.PresencePreferred),
+    qcheck.return(glasslock.PresenceDiscouraged),
+  ])
+}
+
+fn credential_id_generator() -> qcheck.Generator(glasslock.CredentialId) {
+  qcheck.byte_aligned_bit_array() |> qcheck.map(glasslock.CredentialId)
+}
+
 type AuthSetup {
   AuthSetup(
     stored_sign_count: Int,
@@ -913,35 +937,41 @@ pub fn sign_count_monotonicity_test() {
 }
 
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
-  let cred_a = glasslock.CredentialId(<<1, 2, 3, 4>>)
-  let cred_b = glasslock.CredentialId(<<5, 6, 7, 8>>)
+  use inputs <- qcheck.given(qcheck.tuple6(
+    qcheck.non_empty_string(),
+    non_empty_list_from(qcheck.non_empty_string()),
+    qcheck.list_from(credential_id_generator()),
+    qcheck.list_from(qcheck.non_empty_string()),
+    qcheck.bool(),
+    qcheck.tuple2(user_verification_generator(), user_presence_generator()),
+  ))
+  let #(
+    relying_party_id,
+    origins,
+    allow_credentials,
+    allowed_top_origins,
+    allow_cross_origin,
+    #(user_verification, user_presence),
+  ) = inputs
+
   let assert Ok(#(_, challenge)) =
     authentication.request(
-      relying_party_id: "example.com",
-      origins: ["https://example.com", "https://alt.example.com"],
+      relying_party_id:,
+      origins:,
       options: authentication.Options(
         ..authentication.default_options(),
-        allow_cross_origin: True,
-        allow_credentials: [cred_a, cred_b],
-        allowed_top_origins: ["https://top.example.com"],
+        allow_credentials:,
+        allow_cross_origin:,
+        allowed_top_origins:,
+        user_verification:,
+        user_presence:,
       ),
     )
 
   let encoded = authentication.encode_challenge(challenge)
   let assert Ok(decoded) = authentication.parse_challenge(encoded)
 
-  assert testing.authentication_challenge_bytes(decoded)
-    == testing.authentication_challenge_bytes(challenge)
-  assert testing.authentication_challenge_rp_id(decoded)
-    == testing.authentication_challenge_rp_id(challenge)
-  assert list.sort(
-      testing.authentication_challenge_origins(decoded),
-      string.compare,
-    )
-    == list.sort(
-      testing.authentication_challenge_origins(challenge),
-      string.compare,
-    )
+  assert decoded == challenge
 }
 
 pub fn decoded_challenge_drives_verify_test() {
