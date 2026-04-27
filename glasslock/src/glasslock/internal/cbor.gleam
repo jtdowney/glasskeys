@@ -54,7 +54,11 @@ fn decode_argument(
       }
     27 ->
       case rest {
-        <<value:64-big-unsigned, remaining:bytes>> -> Ok(#(value, remaining))
+        <<high:32-big-unsigned, low:32-big-unsigned, remaining:bytes>> ->
+          case high <= 0x1F_FFFF {
+            True -> Ok(#(high * 0x1_0000_0000 + low, remaining))
+            False -> Error("CBOR value exceeds 53-bit range")
+          }
         _ -> Error("Truncated CBOR: expected 8 byte argument")
       }
     _ -> Error("Unsupported CBOR additional info: " <> int.to_string(info))

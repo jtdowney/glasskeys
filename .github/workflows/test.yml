@@ -44,6 +44,7 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
+      - run: gleam test --target javascript
 
   glasskey:
     name: glasskey (Gleam ${{ matrix.gleam }})
