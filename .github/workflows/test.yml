@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gleam: ["1.16"]
+        gleam: ["1.15", "1.16"]
     steps:
       - uses: actions/checkout@v6
       - uses: erlef/setup-beam@v1
