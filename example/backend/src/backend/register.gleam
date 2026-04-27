@@ -58,7 +58,7 @@ fn begin_registration(
     Error(_) -> {
       let user_id = crypto.strong_random_bytes(32)
 
-      case
+      let assert Ok(#(options_json, challenge)) =
         registration.request(
           relying_party: registration.RelyingParty(
             id: ctx.rp_id,
@@ -75,24 +75,20 @@ fn begin_registration(
             resident_key: registration.ResidentKeyRequired,
           ),
         )
-      {
-        Ok(#(options_json, challenge)) -> {
-          let pending =
-            encode_pending(PendingRegistration(username:, user_id:, challenge:))
 
-          json.object([#("options", options_json)])
-          |> json.to_string
-          |> wisp.json_response(200)
-          |> wisp.set_cookie(
-            req,
-            session_cookie,
-            pending,
-            wisp.Signed,
-            session_max_age,
-          )
-        }
-        Error(_) -> error_response("invalid registration options", 500)
-      }
+      let pending =
+        encode_pending(PendingRegistration(username:, user_id:, challenge:))
+
+      json.object([#("options", options_json)])
+      |> json.to_string
+      |> wisp.json_response(200)
+      |> wisp.set_cookie(
+        req,
+        session_cookie,
+        pending,
+        wisp.Signed,
+        session_max_age,
+      )
     }
   }
 }
