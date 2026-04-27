@@ -200,6 +200,11 @@ pub fn challenge_data(challenge: Challenge) -> internal.ChallengeData {
   challenge.data
 }
 
+@internal
+pub fn challenge_algorithms(challenge: Challenge) -> List(Algorithm) {
+  challenge.algorithms
+}
+
 /// Decode a previously-encoded registration challenge. Returns a
 /// `ParseError` if the blob is malformed, encodes an authentication
 /// challenge, or uses an unsupported format version.

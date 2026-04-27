@@ -8,6 +8,7 @@ import gleam/dynamic/decode
 import gleam/json
 import gleam/list
 import gleam/option
+import gleam/set
 import gleam/string
 import gleam/time/duration
 import kryptos/crypto
@@ -971,7 +972,22 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
   let encoded = authentication.encode_challenge(challenge)
   let assert Ok(decoded) = authentication.parse_challenge(encoded)
 
-  assert decoded == challenge
+  let challenge_data = authentication.challenge_data(challenge)
+  let decoded_data = authentication.challenge_data(decoded)
+  let challenge_origins =
+    challenge_data.origins |> set.to_list |> list.sort(string.compare)
+  let decoded_origins =
+    decoded_data.origins |> set.to_list |> list.sort(string.compare)
+
+  assert decoded_origins == challenge_origins
+  assert decoded_data.bytes == challenge_data.bytes
+  assert decoded_data.rp_id == challenge_data.rp_id
+  assert decoded_data.user_verification == challenge_data.user_verification
+  assert decoded_data.user_presence == challenge_data.user_presence
+  assert decoded_data.allow_cross_origin == challenge_data.allow_cross_origin
+  assert decoded_data.allowed_top_origins == challenge_data.allowed_top_origins
+  assert authentication.challenge_allowed_credentials(decoded)
+    == authentication.challenge_allowed_credentials(challenge)
 }
 
 pub fn decoded_challenge_drives_verify_test() {

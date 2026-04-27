@@ -172,6 +172,13 @@ pub fn challenge_data(challenge: Challenge) -> internal.ChallengeData {
   challenge.data
 }
 
+@internal
+pub fn challenge_allowed_credentials(
+  challenge: Challenge,
+) -> List(glasslock.CredentialId) {
+  challenge.allowed_credentials
+}
+
 /// Decode a previously-encoded authentication challenge. Returns a
 /// `ParseError` if the blob is malformed, encodes a registration challenge,
 /// or uses an unsupported format version.
