@@ -81,10 +81,10 @@ case authentication.parse_response(response_json) {
     // Look up stored credential by info.credential_id or info.user_handle
     case lookup_credential(info.credential_id) {
       Ok(stored) -> authentication.verify(response_json:, challenge:, stored:)
-      Error(_) -> // Handle lookup error
+      Error(_) -> todo as "handle lookup error"
     }
   }
-  Error(_) -> // Handle parse error
+  Error(_) -> todo as "handle parse error"
 }
 ```
 

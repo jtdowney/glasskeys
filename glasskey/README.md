@@ -25,10 +25,10 @@ import gleam/javascript/promise
 
 use result <- promise.await(glasskey.start_registration(options))
 case result {
-  Ok(response_json) -> // POST response_json to server for verification
-  Error(glasskey.NotSupported) -> // WebAuthn not available
-  Error(glasskey.NotAllowed) -> // User cancelled
-  Error(e) -> // Other error
+  Ok(response_json) -> todo as "POST response_json to server for verification"
+  Error(glasskey.NotSupported) -> todo as "WebAuthn not available"
+  Error(glasskey.NotAllowed) -> todo as "user cancelled"
+  Error(e) -> todo as "other error"
 }
 ```
 
@@ -37,8 +37,8 @@ case result {
 ```gleam
 use result <- promise.await(glasskey.start_authentication(options))
 case result {
-  Ok(response_json) -> // POST response_json to server for verification
-  Error(e) -> // Handle error
+  Ok(response_json) -> todo as "POST response_json to server for verification"
+  Error(e) -> todo as "handle error"
 }
 ```
 
@@ -51,9 +51,9 @@ case glasskey.start_conditional_authentication(options) {
   Ok(glasskey.ConditionalAuthentication(result:, abort:)) -> {
     // `abort` cancels the pending ceremony; call it before starting a modal flow.
     use response <- promise.await(result)
-    // Send response JSON to server for verification
+    todo as "send response JSON to server for verification"
   }
-  Error(e) -> // Handle error
+  Error(e) -> todo as "handle error"
 }
 ```
 
@@ -65,8 +65,8 @@ import gleam/javascript/promise
 
 // Synchronous check
 case glasskey.supports_webauthn() {
-  True -> // WebAuthn is available
-  False -> // Fall back to password auth
+  True -> todo as "WebAuthn is available"
+  False -> todo as "fall back to password auth"
 }
 
 // Check for platform authenticator (Touch ID, Windows Hello, etc.)
