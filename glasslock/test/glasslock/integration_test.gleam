@@ -3,27 +3,6 @@ import glasslock/registration
 import glasslock/testing
 import gleam/option
 
-pub fn register_then_authenticate_es256_test() {
-  register_then_authenticate(
-    registration.Es256,
-    testing.generate_es256_keypair(),
-  )
-}
-
-pub fn register_then_authenticate_ed25519_test() {
-  register_then_authenticate(
-    registration.Ed25519,
-    testing.generate_ed25519_keypair(),
-  )
-}
-
-pub fn register_then_authenticate_rs256_test() {
-  register_then_authenticate(
-    registration.Rs256,
-    testing.generate_rs256_keypair(),
-  )
-}
-
 fn register_then_authenticate(
   algorithm: registration.Algorithm,
   keypair: testing.KeyPair,
@@ -82,4 +61,25 @@ fn register_then_authenticate(
       stored: credential,
     )
   assert updated.sign_count == 1
+}
+
+pub fn register_then_authenticate_es256_test() {
+  register_then_authenticate(
+    registration.Es256,
+    testing.generate_es256_keypair(),
+  )
+}
+
+pub fn register_then_authenticate_ed25519_test() {
+  register_then_authenticate(
+    registration.Ed25519,
+    testing.generate_ed25519_keypair(),
+  )
+}
+
+pub fn register_then_authenticate_rs256_test() {
+  register_then_authenticate(
+    registration.Rs256,
+    testing.generate_rs256_keypair(),
+  )
 }

@@ -12,6 +12,82 @@ import gleam/string
 import gleam/time/duration
 import qcheck
 
+fn algorithm_generator() -> qcheck.Generator(registration.Algorithm) {
+  qcheck.from_generators(qcheck.return(registration.Es256), [
+    qcheck.return(registration.Ed25519),
+    qcheck.return(registration.Rs256),
+  ])
+}
+
+fn non_empty_list_from(
+  element: qcheck.Generator(a),
+) -> qcheck.Generator(List(a)) {
+  qcheck.map2(element, qcheck.list_from(element), fn(x, xs) { [x, ..xs] })
+}
+
+fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
+  registration.Options(..registration.default_options(), user_verification: uv)
+}
+
+fn make_request(
+  options: registration.Options,
+) -> #(Json, registration.Challenge) {
+  let assert Ok(request) =
+    registration.request(
+      relying_party: registration.RelyingParty(
+        id: "example.com",
+        name: "Test App",
+      ),
+      user: registration.User(
+        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+        name: "testuser",
+        display_name: "Test User",
+      ),
+      origins: ["https://example.com"],
+      options:,
+    )
+  request
+}
+
+fn setup_challenge() -> registration.Challenge {
+  setup_challenge_with_verification(glasslock.VerificationPreferred)
+}
+
+fn setup_challenge_with_verification(
+  uv: glasslock.UserVerification,
+) -> registration.Challenge {
+  let #(_, challenge) = make_request(setup_options(uv))
+  challenge
+}
+
+fn build_response(
+  challenge challenge: registration.Challenge,
+  flags flags: testing.AuthenticatorFlags,
+) -> String {
+  let keypair = testing.generate_es256_keypair()
+  let credential_id = glasslock.CredentialId(<<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>)
+  let auth_data =
+    testing.build_registration_authenticator_data(
+      relying_party_id: testing.registration_challenge_rp_id(challenge),
+      credential_id:,
+      cose_key: testing.cose_key(keypair),
+      flags:,
+      sign_count: 0,
+    )
+  let client_data_json =
+    testing.build_client_data_create(
+      challenge: testing.registration_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: False,
+    )
+  testing.to_registration_json_with(
+    credential_id:,
+    client_data_json:,
+    attestation_object: testing.build_attestation_object(auth_data),
+    credential_type: "public-key",
+  )
+}
+
 pub fn request_emits_core_fields_test() {
   let #(options_json, challenge) = make_request(registration.default_options())
 
@@ -336,7 +412,7 @@ pub fn verify_rejects_when_verification_required_but_not_performed_test() {
   let challenge =
     setup_challenge_with_verification(glasslock.VerificationRequired)
   let response_json =
-    manually_built_response(
+    build_response(
       challenge:,
       flags: testing.AuthenticatorFlags(
         user_present: True,
@@ -351,7 +427,7 @@ pub fn verify_succeeds_when_verification_required_and_performed_test() {
   let challenge =
     setup_challenge_with_verification(glasslock.VerificationRequired)
   let response_json =
-    manually_built_response(
+    build_response(
       challenge:,
       flags: testing.AuthenticatorFlags(user_present: True, user_verified: True),
     )
@@ -362,7 +438,7 @@ pub fn verify_succeeds_when_verification_required_and_performed_test() {
 pub fn verify_rejects_user_presence_not_asserted_test() {
   let challenge = setup_challenge()
   let response_json =
-    manually_built_response(
+    build_response(
       challenge:,
       flags: testing.AuthenticatorFlags(
         user_present: False,
@@ -469,19 +545,6 @@ pub fn verify_rejects_invalid_credential_type_test() {
   let result = registration.verify(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.CredentialTypeField))
-}
-
-fn algorithm_generator() -> qcheck.Generator(registration.Algorithm) {
-  qcheck.from_generators(qcheck.return(registration.Es256), [
-    qcheck.return(registration.Ed25519),
-    qcheck.return(registration.Rs256),
-  ])
-}
-
-fn non_empty_list_from(
-  element: qcheck.Generator(a),
-) -> qcheck.Generator(List(a)) {
-  qcheck.map2(element, qcheck.list_from(element), fn(x, xs) { [x, ..xs] })
 }
 
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
@@ -594,69 +657,6 @@ pub fn decode_rejects_unknown_version_test() {
   let result = registration.parse_challenge(blob)
   assert result
     == Error(registration.ParseError("Unsupported challenge version: 99"))
-}
-
-fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
-  registration.Options(..registration.default_options(), user_verification: uv)
-}
-
-fn make_request(
-  options: registration.Options,
-) -> #(Json, registration.Challenge) {
-  let assert Ok(request) =
-    registration.request(
-      relying_party: registration.RelyingParty(
-        id: "example.com",
-        name: "Test App",
-      ),
-      user: registration.User(
-        id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
-        name: "testuser",
-        display_name: "Test User",
-      ),
-      origins: ["https://example.com"],
-      options:,
-    )
-  request
-}
-
-fn setup_challenge() -> registration.Challenge {
-  setup_challenge_with_verification(glasslock.VerificationPreferred)
-}
-
-fn setup_challenge_with_verification(
-  uv: glasslock.UserVerification,
-) -> registration.Challenge {
-  let #(_, challenge) = make_request(setup_options(uv))
-  challenge
-}
-
-fn manually_built_response(
-  challenge challenge: registration.Challenge,
-  flags flags: testing.AuthenticatorFlags,
-) -> String {
-  let keypair = testing.generate_es256_keypair()
-  let credential_id = glasslock.CredentialId(<<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>)
-  let auth_data =
-    testing.build_registration_authenticator_data(
-      relying_party_id: testing.registration_challenge_rp_id(challenge),
-      credential_id:,
-      cose_key: testing.cose_key(keypair),
-      flags:,
-      sign_count: 0,
-    )
-  let client_data_json =
-    testing.build_client_data_create(
-      challenge: testing.registration_challenge_bytes(challenge),
-      origin: "https://example.com",
-      cross_origin: False,
-    )
-  testing.to_registration_json_with(
-    credential_id:,
-    client_data_json:,
-    attestation_object: testing.build_attestation_object(auth_data),
-    credential_type: "public-key",
-  )
 }
 
 pub fn request_emits_compat_json_test() {

@@ -14,6 +14,151 @@ import kryptos/crypto
 import kryptos/hash
 import qcheck
 
+type AuthSetup {
+  AuthSetup(
+    stored_sign_count: Int,
+    user_verification: glasslock.UserVerification,
+    allow_cross_origin: Bool,
+    allow_credentials_override: option.Option(List(glasslock.CredentialId)),
+    generate_keypair: fn() -> testing.KeyPair,
+  )
+}
+
+fn default_auth_setup() -> AuthSetup {
+  AuthSetup(
+    stored_sign_count: 0,
+    user_verification: glasslock.VerificationPreferred,
+    allow_cross_origin: False,
+    allow_credentials_override: option.None,
+    generate_keypair: testing.generate_es256_keypair,
+  )
+}
+
+fn setup_authentication() -> #(
+  authentication.Challenge,
+  glasslock.Credential,
+  testing.KeyPair,
+) {
+  setup_authentication_with(default_auth_setup())
+}
+
+fn setup_authentication_with(
+  config: AuthSetup,
+) -> #(authentication.Challenge, glasslock.Credential, testing.KeyPair) {
+  let keypair = config.generate_keypair()
+  let credential_id = crypto.random_bytes(32)
+  let stored_credential =
+    glasslock.Credential(
+      id: glasslock.CredentialId(credential_id),
+      public_key: testing.public_key(keypair),
+      sign_count: config.stored_sign_count,
+    )
+  let allow_credentials = case config.allow_credentials_override {
+    option.None -> [glasslock.CredentialId(credential_id)]
+    option.Some(ids) -> ids
+  }
+  let assert Ok(#(_, challenge)) =
+    authentication.request(
+      relying_party_id: "example.com",
+      origins: ["https://example.com"],
+      options: authentication.Options(
+        ..authentication.default_options(),
+        allow_credentials:,
+        user_verification: config.user_verification,
+        allow_cross_origin: config.allow_cross_origin,
+      ),
+    )
+  #(challenge, stored_credential, keypair)
+}
+
+fn signed_response(
+  challenge challenge: authentication.Challenge,
+  stored stored: glasslock.Credential,
+  keypair keypair: testing.KeyPair,
+  sign_count sign_count: Int,
+  client_data_json client_data_json: BitArray,
+) -> String {
+  let auth_data =
+    testing.build_authentication_authenticator_data(
+      relying_party_id: testing.authentication_challenge_rp_id(challenge),
+      flags: testing.default_flags(),
+      sign_count:,
+    )
+  let signature =
+    testing.sign_authentication_message(
+      keypair:,
+      authenticator_data: auth_data,
+      client_data_json:,
+    )
+  testing.to_authentication_json_with(
+    credential_id: stored.id,
+    authenticator_data: auth_data,
+    client_data_json:,
+    signature:,
+    user_handle: option.None,
+    credential_type: "public-key",
+  )
+}
+
+fn signed_response_with_flags(
+  challenge challenge: authentication.Challenge,
+  stored stored: glasslock.Credential,
+  keypair keypair: testing.KeyPair,
+  sign_count sign_count: Int,
+  flags flags: testing.AuthenticatorFlags,
+) -> String {
+  let auth_data =
+    testing.build_authentication_authenticator_data(
+      relying_party_id: testing.authentication_challenge_rp_id(challenge),
+      flags:,
+      sign_count:,
+    )
+  let client_data_json =
+    testing.build_client_data_get(
+      challenge: testing.authentication_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: False,
+    )
+  let signature =
+    testing.sign_authentication_message(
+      keypair:,
+      authenticator_data: auth_data,
+      client_data_json:,
+    )
+  testing.to_authentication_json_with(
+    credential_id: stored.id,
+    authenticator_data: auth_data,
+    client_data_json:,
+    signature:,
+    user_handle: option.None,
+    credential_type: "public-key",
+  )
+}
+
+fn response_envelope(
+  credential_id credential_id: BitArray,
+  credential_type credential_type: String,
+  user_handle user_handle: option.Option(json.Json),
+) -> String {
+  let base_response_fields = [
+    #("clientDataJSON", json.string("dGVzdA")),
+    #("authenticatorData", json.string("dGVzdA")),
+    #("signature", json.string("dGVzdA")),
+  ]
+  let response_fields = case user_handle {
+    option.None -> base_response_fields
+    option.Some(value) -> [#("userHandle", value), ..base_response_fields]
+  }
+  json.object([
+    #("id", json.string(bit_array.base64_url_encode(credential_id, False))),
+    #("rawId", json.string(bit_array.base64_url_encode(credential_id, False))),
+    #("type", json.string(credential_type)),
+    #("response", json.object(response_fields)),
+    #("clientExtensionResults", json.object([])),
+  ])
+  |> json.to_string
+}
+
 pub fn request_emits_core_fields_test() {
   let assert Ok(#(options_json, challenge)) =
     authentication.request(
@@ -767,16 +912,6 @@ pub fn sign_count_monotonicity_test() {
   }
 }
 
-type AuthSetup {
-  AuthSetup(
-    stored_sign_count: Int,
-    user_verification: glasslock.UserVerification,
-    allow_cross_origin: Bool,
-    allow_credentials_override: option.Option(List(glasslock.CredentialId)),
-    generate_keypair: fn() -> testing.KeyPair,
-  )
-}
-
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
   let cred_a = glasslock.CredentialId(<<1, 2, 3, 4>>)
   let cred_b = glasslock.CredentialId(<<5, 6, 7, 8>>)
@@ -897,141 +1032,6 @@ pub fn decode_rejects_unknown_version_test() {
   let result = authentication.parse_challenge(blob)
   assert result
     == Error(authentication.ParseError("Unsupported challenge version: 99"))
-}
-
-fn default_auth_setup() -> AuthSetup {
-  AuthSetup(
-    stored_sign_count: 0,
-    user_verification: glasslock.VerificationPreferred,
-    allow_cross_origin: False,
-    allow_credentials_override: option.None,
-    generate_keypair: testing.generate_es256_keypair,
-  )
-}
-
-fn setup_authentication() -> #(
-  authentication.Challenge,
-  glasslock.Credential,
-  testing.KeyPair,
-) {
-  setup_authentication_with(default_auth_setup())
-}
-
-fn setup_authentication_with(
-  config: AuthSetup,
-) -> #(authentication.Challenge, glasslock.Credential, testing.KeyPair) {
-  let keypair = config.generate_keypair()
-  let credential_id = crypto.random_bytes(32)
-  let stored_credential =
-    glasslock.Credential(
-      id: glasslock.CredentialId(credential_id),
-      public_key: testing.public_key(keypair),
-      sign_count: config.stored_sign_count,
-    )
-  let allow_credentials = case config.allow_credentials_override {
-    option.None -> [glasslock.CredentialId(credential_id)]
-    option.Some(ids) -> ids
-  }
-  let assert Ok(#(_, challenge)) =
-    authentication.request(
-      relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.Options(
-        ..authentication.default_options(),
-        allow_credentials:,
-        user_verification: config.user_verification,
-        allow_cross_origin: config.allow_cross_origin,
-      ),
-    )
-  #(challenge, stored_credential, keypair)
-}
-
-fn signed_response(
-  challenge challenge: authentication.Challenge,
-  stored stored: glasslock.Credential,
-  keypair keypair: testing.KeyPair,
-  sign_count sign_count: Int,
-  client_data_json client_data_json: BitArray,
-) -> String {
-  let auth_data =
-    testing.build_authentication_authenticator_data(
-      relying_party_id: testing.authentication_challenge_rp_id(challenge),
-      flags: testing.default_flags(),
-      sign_count:,
-    )
-  let signature =
-    testing.sign_authentication_message(
-      keypair:,
-      authenticator_data: auth_data,
-      client_data_json:,
-    )
-  testing.to_authentication_json_with(
-    credential_id: stored.id,
-    authenticator_data: auth_data,
-    client_data_json:,
-    signature:,
-    user_handle: option.None,
-    credential_type: "public-key",
-  )
-}
-
-fn signed_response_with_flags(
-  challenge challenge: authentication.Challenge,
-  stored stored: glasslock.Credential,
-  keypair keypair: testing.KeyPair,
-  sign_count sign_count: Int,
-  flags flags: testing.AuthenticatorFlags,
-) -> String {
-  let auth_data =
-    testing.build_authentication_authenticator_data(
-      relying_party_id: testing.authentication_challenge_rp_id(challenge),
-      flags:,
-      sign_count:,
-    )
-  let client_data_json =
-    testing.build_client_data_get(
-      challenge: testing.authentication_challenge_bytes(challenge),
-      origin: "https://example.com",
-      cross_origin: False,
-    )
-  let signature =
-    testing.sign_authentication_message(
-      keypair:,
-      authenticator_data: auth_data,
-      client_data_json:,
-    )
-  testing.to_authentication_json_with(
-    credential_id: stored.id,
-    authenticator_data: auth_data,
-    client_data_json:,
-    signature:,
-    user_handle: option.None,
-    credential_type: "public-key",
-  )
-}
-
-fn response_envelope(
-  credential_id credential_id: BitArray,
-  credential_type credential_type: String,
-  user_handle user_handle: option.Option(json.Json),
-) -> String {
-  let base_response_fields = [
-    #("clientDataJSON", json.string("dGVzdA")),
-    #("authenticatorData", json.string("dGVzdA")),
-    #("signature", json.string("dGVzdA")),
-  ]
-  let response_fields = case user_handle {
-    option.None -> base_response_fields
-    option.Some(value) -> [#("userHandle", value), ..base_response_fields]
-  }
-  json.object([
-    #("id", json.string(bit_array.base64_url_encode(credential_id, False))),
-    #("rawId", json.string(bit_array.base64_url_encode(credential_id, False))),
-    #("type", json.string(credential_type)),
-    #("response", json.object(response_fields)),
-    #("clientExtensionResults", json.object([])),
-  ])
-  |> json.to_string
 }
 
 pub fn request_emits_compat_json_test() {
