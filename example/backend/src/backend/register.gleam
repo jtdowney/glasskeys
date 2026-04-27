@@ -107,7 +107,7 @@ fn complete_registration(
       decode_pending(raw)
       |> result.map_error(fn(_) { #("session not found", 400) }),
     )
-    use credential <- result.map(
+    use credential <- result.try(
       registration.verify(
         response_json: response_json,
         challenge: session.challenge,
@@ -120,6 +120,7 @@ fn complete_registration(
       session.user_id,
       credential,
     )
+    Ok(Nil)
   }
 
   case result {
