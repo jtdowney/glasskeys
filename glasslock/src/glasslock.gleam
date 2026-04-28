@@ -1,4 +1,4 @@
-//// Server-side WebAuthn/FIDO2 credential verification for Gleam on Erlang.
+//// Server-side WebAuthn/FIDO2 credential verification for Gleam, targeting Erlang and Node.js.
 ////
 //// Covers both registration and authentication ceremonies: generate
 //// challenge options for the browser, then verify the signed responses.

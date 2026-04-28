@@ -26,10 +26,10 @@ You can expect an initial response within 48 hours. We will work with you to und
 
 This project consists of two independent libraries for WebAuthn/FIDO2 passkey authentication:
 
-- **glasslock**: server-side credential verification (Erlang and JavaScript targets)
+- **glasslock**: server-side credential verification (Erlang and Node.js targets)
 - **glasskey**: browser WebAuthn API bindings (JavaScript target)
 
-glasslock delegates cryptographic operations to [kryptos](https://github.com/jtdowney/kryptos), which wraps platform-native implementations: Erlang/OTP's `:crypto` module on BEAM, or Node.js `crypto` on JavaScript.
+glasslock delegates cryptographic operations to [kryptos](https://github.com/jtdowney/kryptos), which wraps platform-native implementations: Erlang/OTP's `:crypto` module on BEAM, or `node:crypto` on Node.js.
 
 glasskey runs in the browser and delegates to `navigator.credentials` (the Web Authentication API). It handles no cryptography directly.
 
@@ -47,7 +47,7 @@ After each authentication, glasslock compares the authenticator's reported sign 
 
 ### glasslock
 
-On Erlang/OTP, use a currently supported OTP version with up-to-date OpenSSL/LibreSSL. On Node.js, use a currently supported LTS version. glasslock delegates cryptography to kryptos, which wraps `:crypto` on Erlang and `node:crypto` on JavaScript.
+On Erlang/OTP, use a currently supported OTP version with up-to-date OpenSSL/LibreSSL. On Node.js, use a currently supported LTS version. glasslock delegates cryptography to kryptos, which wraps `:crypto` on Erlang and `node:crypto` on Node.js.
 
 ### glasskey
 
