@@ -120,7 +120,7 @@ fn complete_registration(
       session.user_id,
       credential,
     )
-    Ok(Nil)
+    |> result.map_error(save_error_response)
   }
 
   case result {
@@ -132,6 +132,14 @@ fn complete_registration(
     Error(#(message, status)) ->
       error_response(message, status)
       |> clear_session(req)
+  }
+}
+
+fn save_error_response(error: credentials.SaveError) -> #(String, Int) {
+  case error {
+    credentials.UsernameTaken -> #("username already registered", 409)
+    credentials.CredentialIdTaken -> #("credential already registered", 409)
+    credentials.UserIdTaken -> #("user id already registered", 409)
   }
 }
 

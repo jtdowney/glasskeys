@@ -101,25 +101,34 @@ pub fn get_user_by_user_id(
   |> result.try(get_user(store, _))
 }
 
+pub type SaveError {
+  UsernameTaken
+  CredentialIdTaken
+  UserIdTaken
+}
+
 pub fn save(
   store: Store,
   username: String,
   user_id: BitArray,
   credential: glasslock.Credential,
-) -> Nil {
+) -> Result(Nil, SaveError) {
   let glasslock.CredentialId(raw_credential_id) = credential.id
   let cred_key = bit_array.base64_url_encode(raw_credential_id, False)
   let uid_key = bit_array.base64_url_encode(user_id, False)
 
   trove.transaction(store.db, timeout: trove_timeout, callback: fn(tx) {
-    let user = case trove.tx_get_in(tx, keyspace: store.users, key: username) {
-      Ok(existing) ->
-        User(..existing, credentials: [credential, ..existing.credentials])
-      Error(_) -> User(username:, user_id:, credentials: [credential])
-    }
+    use <- guard_unique(tx, store.users, username, UsernameTaken)
+    use <- guard_unique(tx, store.credential_index, cred_key, CredentialIdTaken)
+    use <- guard_unique(tx, store.user_id_index, uid_key, UserIdTaken)
+
     let tx =
       tx
-      |> trove.tx_put_in(keyspace: store.users, key: username, value: user)
+      |> trove.tx_put_in(
+        keyspace: store.users,
+        key: username,
+        value: User(username:, user_id:, credentials: [credential]),
+      )
       |> trove.tx_put_in(
         keyspace: store.credential_index,
         key: cred_key,
@@ -130,8 +139,22 @@ pub fn save(
         key: uid_key,
         value: username,
       )
-    trove.Commit(tx: tx, result: Nil)
+    trove.Commit(tx: tx, result: Ok(Nil))
   })
+}
+
+fn guard_unique(
+  tx: trove.Tx(String, String),
+  keyspace: trove.Keyspace(String, v),
+  key: String,
+  conflict: SaveError,
+  proceed: fn() ->
+    trove.TransactionResult(String, String, Result(Nil, SaveError)),
+) -> trove.TransactionResult(String, String, Result(Nil, SaveError)) {
+  case trove.tx_has_key_in(tx, keyspace:, key:) {
+    True -> trove.Cancel(result: Error(conflict))
+    False -> proceed()
+  }
 }
 
 pub fn update(
