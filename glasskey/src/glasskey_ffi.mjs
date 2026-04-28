@@ -115,27 +115,29 @@ export async function getCredential(opts) {
 export function getConditionalCredential(opts) {
   const controller = new AbortController();
   const publicKey = buildPublicKeyForGet(opts);
+  return [
+    runConditionalGet(publicKey, controller.signal),
+    () => controller.abort(),
+  ];
+}
 
-  const promise = isConditionalMediationAvailable().then((available) => {
-    if (!available) {
-      return Result$Error(Error$NotSupported());
+async function runConditionalGet(publicKey, signal) {
+  if (!(await isConditionalMediationAvailable())) {
+    return Result$Error(Error$NotSupported());
+  }
+  try {
+    const credential = await navigator.credentials.get({
+      publicKey,
+      mediation: "conditional",
+      signal,
+    });
+    if (!credential) {
+      return Result$Error(Error$NotAllowed());
     }
-    return navigator.credentials
-      .get({
-        publicKey,
-        mediation: "conditional",
-        signal: controller.signal,
-      })
-      .then((credential) => {
-        if (!credential) {
-          return Result$Error(Error$NotAllowed());
-        }
-        return Result$Ok(extractAuthenticationFields(credential));
-      })
-      .catch((error) => Result$Error(classifyJsError(error)));
-  });
-
-  return [promise, () => controller.abort()];
+    return Result$Ok(extractAuthenticationFields(credential));
+  } catch (error) {
+    return Result$Error(classifyJsError(error));
+  }
 }
 
 function extractRegistrationFields(credential) {
