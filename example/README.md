@@ -19,6 +19,18 @@ just example-svelte  # backend + Svelte frontend
 
 Each frontend's dev server proxies `/api` to `localhost:3000`, so there is no browser-side CORS in dev.
 
+## Manual smoke test
+
+After starting either example, walk both ceremonies end-to-end:
+
+1. Open the frontend (`http://localhost:1234` for Lustre, `http://localhost:5173` for Svelte).
+2. Click **Register**, enter a username, and complete the authenticator prompt (Touch ID, Windows Hello, a security key, or a virtual authenticator).
+3. Confirm the welcome page shows for the new username.
+4. Reload to land back on the home page, then click **Sign in** and complete the authenticator prompt again.
+5. Confirm the welcome page renders for the same username.
+
+If your machine has no built-in authenticator, enable one in Chrome DevTools: open **More tools → WebAuthn**, click **Enable**, then **Add authenticator** with **Resident keys** and **User verification** turned on.
+
 ## Configuration
 
 The backend reads these environment variables, falling back to demo defaults:
