@@ -38,7 +38,6 @@ export async function createCredential(opts) {
       displayName: opts.user.display_name,
     },
     pubKeyCredParams: toPublicKeyCredParams(opts.pub_key_cred_params),
-    attestation: opts.attestation,
   };
 
   const sel = opts.authenticator_selection;

@@ -52,18 +52,6 @@ pub type Algorithm {
   Rs256
 }
 
-/// Attestation conveyance preference from the relying party.
-pub type Attestation {
-  /// No attestation requested.
-  AttestationNone
-  /// Attestation data returned directly from the authenticator.
-  AttestationDirect
-  /// Attestation data may be replaced by an anonymization CA.
-  AttestationIndirect
-  /// Enterprise attestation with device-identifying information.
-  AttestationEnterprise
-}
-
 /// Raw credential returned by the browser after `navigator.credentials.get()`.
 @internal
 pub type AuthenticationCredential {
@@ -144,7 +132,6 @@ pub type RegistrationOptions {
     user_display_name: String,
     algorithms: List(Algorithm),
     timeout: Option(Int),
-    attestation: Attestation,
     resident_key: Option(Requirement),
     user_verification: Option(Requirement),
     authenticator_attachment: Option(AuthenticatorAttachment),
@@ -177,7 +164,6 @@ type CreateOptions {
     user: User,
     pub_key_cred_params: array.Array(PubKeyCredParam),
     timeout: Option(Int),
-    attestation: String,
     authenticator_selection: AuthenticatorSelection,
     exclude_credentials: array.Array(CredentialDescriptor),
   )
@@ -406,11 +392,6 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
     option.None,
     decode.map(decode.int, option.Some),
   )
-  use attestation <- decode.optional_field(
-    "attestation",
-    AttestationNone,
-    attestation_decoder(),
-  )
   use #(resident_key, user_verification, authenticator_attachment) <- decode.optional_field(
     "authenticatorSelection",
     #(option.None, option.None, option.None),
@@ -430,7 +411,6 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
     user_display_name:,
     algorithms:,
     timeout:,
-    attestation:,
     resident_key:,
     user_verification:,
     authenticator_attachment:,
@@ -446,19 +426,6 @@ fn algorithm_decoder() -> decode.Decoder(Algorithm) {
       -8 -> decode.success(Ed25519)
       -257 -> decode.success(Rs256)
       _ -> decode.failure(Es256, "algorithm")
-    }
-  })
-}
-
-fn attestation_decoder() -> decode.Decoder(Attestation) {
-  decode.string
-  |> decode.then(fn(s) {
-    case s {
-      "none" -> decode.success(AttestationNone)
-      "direct" -> decode.success(AttestationDirect)
-      "indirect" -> decode.success(AttestationIndirect)
-      "enterprise" -> decode.success(AttestationEnterprise)
-      _ -> decode.failure(AttestationNone, "attestation")
     }
   })
 }
@@ -567,7 +534,6 @@ fn to_create_options(options: RegistrationOptions) -> CreateOptions {
       }),
     ),
     timeout: options.timeout,
-    attestation: attestation_to_string(options.attestation),
     authenticator_selection: AuthenticatorSelection(
       resident_key: option.map(options.resident_key, requirement_to_string),
       user_verification: option.map(
@@ -601,15 +567,6 @@ fn algorithm_to_cose(algorithm: Algorithm) -> Int {
     Es256 -> -7
     Ed25519 -> -8
     Rs256 -> -257
-  }
-}
-
-fn attestation_to_string(attestation: Attestation) -> String {
-  case attestation {
-    AttestationNone -> "none"
-    AttestationDirect -> "direct"
-    AttestationIndirect -> "indirect"
-    AttestationEnterprise -> "enterprise"
   }
 }
 

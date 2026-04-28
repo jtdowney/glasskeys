@@ -220,7 +220,6 @@ export function lastCreateSnapshot() {
       optionalString(pk.authenticatorSelection?.residentKey),
       optionalString(pk.authenticatorSelection?.userVerification),
       pk.authenticatorSelection !== undefined,
-      pk.attestation,
       toList(pk.pubKeyCredParams.map((p) => p.alg)),
     ),
   );

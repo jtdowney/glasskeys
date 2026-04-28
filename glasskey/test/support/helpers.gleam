@@ -10,7 +10,6 @@ pub type CreateSnapshot {
     resident_key: Option(String),
     user_verification: Option(String),
     has_authenticator_selection: Bool,
-    attestation: String,
     algs: List(Int),
   )
 }

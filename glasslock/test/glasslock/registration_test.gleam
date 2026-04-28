@@ -103,28 +103,15 @@ pub fn request_emits_core_fields_test() {
     use relying_party_id <- decode.subfield(["rp", "id"], decode.string)
     use relying_party_name <- decode.subfield(["rp", "name"], decode.string)
     use user_name <- decode.subfield(["user", "name"], decode.string)
-    use attestation <- decode.field("attestation", decode.string)
     use timeout <- decode.field("timeout", decode.int)
-    decode.success(#(
-      relying_party_id,
-      relying_party_name,
-      user_name,
-      attestation,
-      timeout,
-    ))
+    decode.success(#(relying_party_id, relying_party_name, user_name, timeout))
   }
 
-  let assert Ok(#(
-    relying_party_id,
-    relying_party_name,
-    user_name,
-    attestation,
-    timeout,
-  )) = json.parse(json.to_string(options_json), decoder)
+  let assert Ok(#(relying_party_id, relying_party_name, user_name, timeout)) =
+    json.parse(json.to_string(options_json), decoder)
   assert relying_party_id == "example.com"
   assert relying_party_name == "Test App"
   assert user_name == "testuser"
-  assert attestation == "none"
   assert timeout == 60_000
 
   assert testing.registration_challenge_origins(challenge)
@@ -236,33 +223,6 @@ pub fn request_resident_key_variants_test() {
       )
     let assert Ok(rk) = json.parse(json.to_string(options_json), decoder)
     assert rk == expected_string
-  })
-}
-
-pub fn request_attestation_variants_test() {
-  let variants = [
-    #(registration.AttestationNone, "none"),
-    #(registration.AttestationIndirect, "indirect"),
-    #(registration.AttestationDirect, "direct"),
-    #(registration.AttestationEnterprise, "enterprise"),
-  ]
-
-  let decoder = {
-    use att <- decode.field("attestation", decode.string)
-    decode.success(att)
-  }
-
-  list.each(variants, fn(pair) {
-    let #(variant, expected_string) = pair
-    let #(options_json, _) =
-      make_request(
-        registration.Options(
-          ..setup_options(glasslock.VerificationPreferred),
-          attestation: variant,
-        ),
-      )
-    let assert Ok(att) = json.parse(json.to_string(options_json), decoder)
-    assert att == expected_string
   })
 }
 
@@ -845,7 +805,6 @@ pub fn request_emits_compat_json_test() {
       origins: ["https://example.com"],
       options: registration.Options(
         timeout: duration.seconds(90),
-        attestation: registration.AttestationDirect,
         authenticator_attachment: option.Some(registration.CrossPlatform),
         resident_key: registration.ResidentKeyRequired,
         user_verification: glasslock.VerificationRequired,

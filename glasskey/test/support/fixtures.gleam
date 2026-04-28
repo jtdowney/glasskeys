@@ -41,7 +41,6 @@ pub fn registration_options_json() -> String {
       ]),
     ),
     #("timeout", json.int(90_000)),
-    #("attestation", json.string("direct")),
     #(
       "authenticatorSelection",
       json.object([
