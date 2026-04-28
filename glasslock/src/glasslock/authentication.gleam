@@ -284,21 +284,21 @@ pub fn request(
 /// Call this first, look up the stored credential, then call verify().
 pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
   use response <- result.try(parse_response_json(response_json))
-  use credential_id <- result.try(
+  use raw_id <- result.try(
     internal.decode_base64url(response.raw_id, "rawId")
     |> result.map_error(internal_error_to_authentication_error),
   )
-  use credential_id_top <- result.try(
+  use credential_id_bytes <- result.try(
     internal.decode_base64url(response.credential_id, "id")
     |> result.map_error(internal_error_to_authentication_error),
   )
   use <- bool.guard(
-    when: credential_id_top != credential_id,
+    when: credential_id_bytes != raw_id,
     return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
 
   internal.decode_optional_base64url(response.user_handle, "userHandle")
-  |> result.map(ResponseInfo(glasslock.CredentialId(credential_id), _))
+  |> result.map(ResponseInfo(glasslock.CredentialId(raw_id), _))
   |> result.map_error(internal_error_to_authentication_error)
 }
 
@@ -317,16 +317,16 @@ pub fn verify(
 ) -> Result(glasslock.Credential, Error) {
   use response <- result.try(parse_response_json(response_json))
 
-  use credential_id <- result.try(
+  use raw_id <- result.try(
     internal.decode_base64url(response.raw_id, "rawId")
     |> result.map_error(internal_error_to_authentication_error),
   )
-  use credential_id_top <- result.try(
+  use credential_id_bytes <- result.try(
     internal.decode_base64url(response.credential_id, "id")
     |> result.map_error(internal_error_to_authentication_error),
   )
   use <- bool.guard(
-    when: credential_id_top != credential_id,
+    when: credential_id_bytes != raw_id,
     return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
   use client_data_json <- result.try(
@@ -356,12 +356,12 @@ pub fn verify(
     when: !list.is_empty(challenge.allowed_credentials)
       && !list.contains(
       challenge.allowed_credentials,
-      glasslock.CredentialId(credential_id),
+      glasslock.CredentialId(raw_id),
     ),
     return: Error(CredentialNotAllowed),
   )
   use <- bool.guard(
-    when: glasslock.CredentialId(credential_id) != stored.id,
+    when: glasslock.CredentialId(raw_id) != stored.id,
     return: Error(CredentialNotAllowed),
   )
 
