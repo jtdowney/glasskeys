@@ -1,13 +1,14 @@
 name = "frontend"
 version = "0.1.0"
 target = "javascript"
+gleam = ">= 1.15.2"
 
 [dependencies]
 glasskey = { path = "../../../glasskey" }
 gleam_http = ">= 4.3.0 and < 5.0.0"
 gleam_javascript = ">= 1.0.0 and < 2.0.0"
-gleam_json = ">= 3.0.0 and < 4.0.0"
-gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+gleam_json = ">= 3.1.0 and < 4.0.0"
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 lustre = ">= 5.0.0 and < 6.0.0"
 modem = ">= 2.1.2 and < 3.0.0"
 rsvp = ">= 1.0.0 and < 2.0.0"

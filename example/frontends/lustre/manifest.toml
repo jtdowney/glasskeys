@@ -48,8 +48,8 @@ packages = [
 glasskey = { path = "../../../glasskey" }
 gleam_http = { version = ">= 4.3.0 and < 5.0.0" }
 gleam_javascript = { version = ">= 1.0.0 and < 2.0.0" }
-gleam_json = { version = ">= 3.0.0 and < 4.0.0" }
-gleam_stdlib = { version = ">= 0.44.0 and < 2.0.0" }
+gleam_json = { version = ">= 3.1.0 and < 4.0.0" }
+gleam_stdlib = { version = ">= 1.0.0 and < 2.0.0" }
 lustre = { version = ">= 5.0.0 and < 6.0.0" }
 lustre_dev_tools = { version = ">= 2.0.0 and < 3.0.0" }
 modem = { version = ">= 2.1.2 and < 3.0.0" }
