@@ -19,6 +19,11 @@ fmt:
     cd example/frontends/lustre && gleam format src
     cd example/frontends/svelte && bun run format
 
+# Generate docs for each project
+docs:
+    cd glasslock && gleam docs build --open
+    cd glasskey && gleam docs build --open
+
 # Download all dependencies
 deps:
     cd glasslock && gleam deps download
