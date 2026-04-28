@@ -42,6 +42,8 @@ fn login(state: model.LoginState) -> Element(model.Msg) {
   html.div([], [
     html.h1([], [html.text("Sign In")]),
     html.div([attribute.class("stack")], [
+      // Anchors browser passkey autofill via the `webauthn` autocomplete
+      // token during conditional mediation; the value is never submitted.
       html.input([
         attribute.type_("text"),
         attribute.name("username"),
