@@ -650,6 +650,45 @@ pub fn verify_rejects_invalid_credential_type_test() {
     == Error(registration.VerificationMismatch(glasslock.CredentialTypeField))
 }
 
+pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
+  let challenge = setup_challenge()
+  let response = testing.build_registration_response(challenge:)
+  let glasslock.CredentialId(raw_id_bytes) = response.credential_id
+  let raw_id_b64 = bit_array.base64_url_encode(raw_id_bytes, False)
+  let mismatched_id_b64 =
+    bit_array.base64_url_encode(<<99, 99, 99, 99, 99, 99, 99, 99>>, False)
+  let response_json =
+    json.object([
+      #("id", json.string(mismatched_id_b64)),
+      #("rawId", json.string(raw_id_b64)),
+      #("type", json.string("public-key")),
+      #(
+        "response",
+        json.object([
+          #(
+            "clientDataJSON",
+            json.string(bit_array.base64_url_encode(
+              response.client_data_json,
+              False,
+            )),
+          ),
+          #(
+            "attestationObject",
+            json.string(bit_array.base64_url_encode(
+              response.attestation_object,
+              False,
+            )),
+          ),
+        ]),
+      ),
+    ])
+    |> json.to_string
+
+  let result = registration.verify(response_json:, challenge:)
+  assert result
+    == Error(registration.VerificationMismatch(glasslock.CredentialIdField))
+}
+
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
   use inputs <- qcheck.given(qcheck.tuple6(
     qcheck.non_empty_string(),

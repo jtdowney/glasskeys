@@ -133,6 +133,7 @@ pub opaque type Challenge {
 type ParsedResponse {
   ParsedResponse(
     raw_id: String,
+    credential_id: String,
     credential_type: String,
     client_data_json: String,
     authenticator_data: String,
@@ -287,6 +288,14 @@ pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
     internal.decode_base64url(response.raw_id, "rawId")
     |> result.map_error(internal_error_to_authentication_error),
   )
+  use credential_id_top <- result.try(
+    internal.decode_base64url(response.credential_id, "id")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use <- bool.guard(
+    when: credential_id_top != credential_id,
+    return: Error(VerificationMismatch(glasslock.CredentialIdField)),
+  )
 
   internal.decode_optional_base64url(response.user_handle, "userHandle")
   |> result.map(ResponseInfo(glasslock.CredentialId(credential_id), _))
@@ -311,6 +320,14 @@ pub fn verify(
   use credential_id <- result.try(
     internal.decode_base64url(response.raw_id, "rawId")
     |> result.map_error(internal_error_to_authentication_error),
+  )
+  use credential_id_top <- result.try(
+    internal.decode_base64url(response.credential_id, "id")
+    |> result.map_error(internal_error_to_authentication_error),
+  )
+  use <- bool.guard(
+    when: credential_id_top != credential_id,
+    return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
   use client_data_json <- result.try(
     internal.decode_base64url(response.client_data_json, "clientDataJSON")
@@ -418,6 +435,7 @@ pub fn verify(
 
 fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
   let decoder = {
+    use credential_id <- decode.field("id", decode.string)
     use raw_id <- decode.field("rawId", decode.string)
     use credential_type <- decode.field("type", decode.string)
     use client_data_json <- decode.subfield(
@@ -436,6 +454,7 @@ fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
     ))
     decode.success(ParsedResponse(
       raw_id:,
+      credential_id:,
       credential_type:,
       client_data_json:,
       authenticator_data:,

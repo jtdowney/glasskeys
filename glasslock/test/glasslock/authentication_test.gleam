@@ -474,6 +474,51 @@ pub fn verify_rejects_credential_id_mismatch_test() {
   assert result == Error(authentication.CredentialNotAllowed)
 }
 
+pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
+  let #(challenge, stored_credential, keypair) = setup_authentication()
+  let response =
+    testing.build_authentication_response(challenge:, keypair:, sign_count: 1)
+  let glasslock.CredentialId(raw_id_bytes) = stored_credential.id
+  let raw_id_b64 = bit_array.base64_url_encode(raw_id_bytes, False)
+  let mismatched_id_b64 =
+    bit_array.base64_url_encode(<<99, 99, 99, 99, 99, 99, 99, 99>>, False)
+  let response_json =
+    json.object([
+      #("id", json.string(mismatched_id_b64)),
+      #("rawId", json.string(raw_id_b64)),
+      #("type", json.string("public-key")),
+      #(
+        "response",
+        json.object([
+          #(
+            "clientDataJSON",
+            json.string(bit_array.base64_url_encode(
+              response.client_data_json,
+              False,
+            )),
+          ),
+          #(
+            "authenticatorData",
+            json.string(bit_array.base64_url_encode(
+              response.authenticator_data,
+              False,
+            )),
+          ),
+          #(
+            "signature",
+            json.string(bit_array.base64_url_encode(response.signature, False)),
+          ),
+        ]),
+      ),
+    ])
+    |> json.to_string
+
+  let result =
+    authentication.verify(response_json:, challenge:, stored: stored_credential)
+  assert result
+    == Error(authentication.VerificationMismatch(glasslock.CredentialIdField))
+}
+
 pub fn verify_rejects_invalid_signature_test() {
   let #(challenge, stored_credential, keypair) = setup_authentication()
 

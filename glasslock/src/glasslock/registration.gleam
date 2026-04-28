@@ -143,6 +143,7 @@ pub opaque type Challenge {
 type ParsedResponse {
   ParsedResponse(
     raw_id: String,
+    credential_id: String,
     credential_type: String,
     client_data_json: String,
     attestation_object: String,
@@ -386,6 +387,19 @@ pub fn verify(
 ) -> Result(glasslock.Credential, Error) {
   use response <- result.try(parse_response_json(response_json))
 
+  use raw_id <- result.try(
+    internal.decode_base64url(response.raw_id, "rawId")
+    |> result.map_error(internal_error_to_registration_error),
+  )
+  use credential_id_bytes <- result.try(
+    internal.decode_base64url(response.credential_id, "id")
+    |> result.map_error(internal_error_to_registration_error),
+  )
+  use <- bool.guard(
+    when: credential_id_bytes != raw_id,
+    return: Error(VerificationMismatch(glasslock.CredentialIdField)),
+  )
+
   use client_data_json <- result.try(
     internal.decode_base64url(response.client_data_json, "clientDataJSON")
     |> result.map_error(internal_error_to_registration_error),
@@ -448,10 +462,6 @@ pub fn verify(
 
   let attested = auth_data.attested_credential
 
-  use raw_id <- result.try(
-    internal.decode_base64url(response.raw_id, "rawId")
-    |> result.map_error(internal_error_to_registration_error),
-  )
   use <- bool.guard(
     when: raw_id != attested.credential_id,
     return: Error(VerificationMismatch(glasslock.CredentialIdField)),
@@ -481,6 +491,7 @@ pub fn verify(
 
 fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
   let decoder = {
+    use credential_id <- decode.field("id", decode.string)
     use raw_id <- decode.field("rawId", decode.string)
     use credential_type <- decode.field("type", decode.string)
     use client_data_json <- decode.subfield(
@@ -493,6 +504,7 @@ fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
     )
     decode.success(ParsedResponse(
       raw_id:,
+      credential_id:,
       credential_type:,
       client_data_json:,
       attestation_object:,
