@@ -281,24 +281,21 @@ pub fn supports_webauthn_autofill() -> Promise(Bool)
 pub fn encode_authentication_response(
   credential: AuthenticationCredential,
 ) -> String {
-  let user_handle_json = case credential.user_handle {
-    option.Some(handle) -> b64_json(handle)
-    option.None -> json.null()
+  let base_fields = [
+    #("clientDataJSON", b64_json(credential.client_data_json)),
+    #("authenticatorData", b64_json(credential.authenticator_data)),
+    #("signature", b64_json(credential.signature)),
+  ]
+  let response_fields = case credential.user_handle {
+    option.Some(handle) -> [#("userHandle", b64_json(handle)), ..base_fields]
+    option.None -> base_fields
   }
 
   json.object([
     #("id", json.string(credential.id)),
     #("rawId", b64_json(credential.raw_id)),
     #("type", json.string("public-key")),
-    #(
-      "response",
-      json.object([
-        #("clientDataJSON", b64_json(credential.client_data_json)),
-        #("authenticatorData", b64_json(credential.authenticator_data)),
-        #("signature", b64_json(credential.signature)),
-        #("userHandle", user_handle_json),
-      ]),
-    ),
+    #("response", json.object(response_fields)),
   ])
   |> json.to_string
 }

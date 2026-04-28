@@ -812,7 +812,7 @@ pub fn encode_authentication_response_with_user_handle_test() {
   assert uh == option.Some("AQI")
 }
 
-pub fn encode_authentication_response_null_user_handle_test() {
+pub fn encode_authentication_response_omits_user_handle_when_missing_test() {
   let result =
     glasskey.encode_authentication_response(glasskey.AuthenticationCredential(
       id: "cred-x",
@@ -824,10 +824,11 @@ pub fn encode_authentication_response_null_user_handle_test() {
     ))
 
   let decoder = {
-    use user_handle <- decode.subfield(
+    use user_handle <- decode.then(decode.optionally_at(
       ["response", "userHandle"],
+      option.None,
       decode.optional(decode.string),
-    )
+    ))
     decode.success(user_handle)
   }
 
@@ -1165,10 +1166,11 @@ pub fn start_authentication_omits_user_handle_when_missing_test() {
 
   let assert Ok(json_string) = result
   let decoder = {
-    use user_handle <- decode.subfield(
+    use user_handle <- decode.then(decode.optionally_at(
       ["response", "userHandle"],
+      option.None,
       decode.optional(decode.string),
-    )
+    ))
     decode.success(user_handle)
   }
   let assert Ok(user_handle) = json.parse(json_string, decoder)
