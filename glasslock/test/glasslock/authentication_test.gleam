@@ -66,7 +66,7 @@ fn setup_authentication_with(
   config: AuthSetup,
 ) -> #(authentication.Challenge, glasslock.Credential, testing.KeyPair) {
   let keypair = config.generate_keypair()
-  let credential_id = crypto.random_bytes(32)
+  let credential_id = crypto.random_bytes(16)
   let stored_credential =
     glasslock.Credential(
       id: glasslock.CredentialId(credential_id),
@@ -427,7 +427,7 @@ pub fn verify_rejects_origin_mismatch_test() {
 }
 
 pub fn verify_rejects_credential_not_allowed_test() {
-  let other_credential_id = glasslock.CredentialId(crypto.random_bytes(32))
+  let other_credential_id = glasslock.CredentialId(crypto.random_bytes(16))
   let #(challenge, stored_credential, keypair) =
     setup_authentication_with(
       AuthSetup(
@@ -458,7 +458,7 @@ pub fn verify_rejects_credential_id_mismatch_test() {
         allow_credentials_override: option.Some([]),
       ),
     )
-  let different_credential_id = glasslock.CredentialId(crypto.random_bytes(32))
+  let different_credential_id = glasslock.CredentialId(crypto.random_bytes(16))
 
   let response =
     testing.build_authentication_response(challenge:, keypair:, sign_count: 1)

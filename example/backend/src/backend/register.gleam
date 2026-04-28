@@ -56,7 +56,7 @@ fn begin_registration(
   case credentials.get_user(ctx.credentials, username) {
     Ok(_) -> error_response("username already registered", 409)
     Error(_) -> {
-      let user_id = crypto.strong_random_bytes(32)
+      let user_id = crypto.strong_random_bytes(16)
 
       let assert Ok(#(options_json, challenge)) =
         registration.request(

@@ -420,7 +420,7 @@ pub fn build_registration_response_with_keypair(
 ) -> RegistrationResponse {
   let data = registration.challenge_data(challenge)
   let assert Ok(origin) = list.first(set.to_list(data.origins))
-  let credential_id = glasslock.CredentialId(crypto.random_bytes(32))
+  let credential_id = glasslock.CredentialId(crypto.random_bytes(16))
   let auth_data =
     build_registration_authenticator_data(
       relying_party_id: data.rp_id,
