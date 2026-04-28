@@ -1226,6 +1226,18 @@ pub fn start_conditional_authentication_resolves_to_assertion_test() {
   promise.resolve(Nil)
 }
 
+pub fn start_conditional_authentication_resolves_not_supported_when_unavailable_test() {
+  use <- with_fake_navigator
+  helpers.set_conditional_mediation_available(False)
+
+  let assert Ok(handle) =
+    glasskey.start_conditional_authentication(default_authentication_options())
+  use result <- promise.await(handle.result)
+
+  assert result == Error(glasskey.NotSupported)
+  promise.resolve(Nil)
+}
+
 pub fn start_conditional_authentication_abort_signals_navigator_test() {
   use <- with_fake_navigator
   helpers.set_get_credential(

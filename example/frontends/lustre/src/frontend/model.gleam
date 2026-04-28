@@ -22,6 +22,7 @@ pub type RegisterState {
 }
 
 pub type LoginState {
+  LoginCheckingAutofill
   LoginSettingUpConditional
   LoginConditional(abort: fn() -> Nil)
   LoginModalBeginning
@@ -46,6 +47,7 @@ pub type RegisterMsg {
 
 pub type LoginMsg {
   UserClickedLogin
+  AutofillSupportChecked(Bool)
   BackendBeganLogin(Result(glasskey.AuthenticationOptions, String))
   BackendBeganModalLogin(Result(glasskey.AuthenticationOptions, String))
   AuthenticatorFinishedLogin(Result(String, glasskey.Error))

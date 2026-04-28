@@ -28,6 +28,7 @@ let lastGetOptions = null;
 let lastGetSignal = null;
 let createBehavior = { kind: "credential", value: null };
 let getBehavior = { kind: "credential", value: null };
+let conditionalMediationAvailable = true;
 
 function snapshotGlobal(key) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
@@ -92,10 +93,11 @@ export function installFakeNavigator() {
   lastGetSignal = null;
   createBehavior = { kind: "credential", value: null };
   getBehavior = { kind: "credential", value: null };
+  conditionalMediationAvailable = true;
 
   class FakePublicKeyCredential {
     static async isConditionalMediationAvailable() {
-      return true;
+      return conditionalMediationAvailable;
     }
     static async isUserVerifyingPlatformAuthenticatorAvailable() {
       return true;
@@ -183,6 +185,10 @@ export function setGetDomException(name, message) {
     kind: "throw",
     error: new FakeDOMException(message, name),
   };
+}
+
+export function setConditionalMediationAvailable(available) {
+  conditionalMediationAvailable = available;
 }
 
 function challengeBitArray(value) {

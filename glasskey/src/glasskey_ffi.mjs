@@ -116,19 +116,24 @@ export function getConditionalCredential(opts) {
   const controller = new AbortController();
   const publicKey = buildPublicKeyForGet(opts);
 
-  const promise = navigator.credentials
-    .get({
-      publicKey,
-      mediation: "conditional",
-      signal: controller.signal,
-    })
-    .then((credential) => {
-      if (!credential) {
-        return Result$Error(Error$NotAllowed());
-      }
-      return Result$Ok(extractAuthenticationFields(credential));
-    })
-    .catch((error) => Result$Error(classifyJsError(error)));
+  const promise = isConditionalMediationAvailable().then((available) => {
+    if (!available) {
+      return Result$Error(Error$NotSupported());
+    }
+    return navigator.credentials
+      .get({
+        publicKey,
+        mediation: "conditional",
+        signal: controller.signal,
+      })
+      .then((credential) => {
+        if (!credential) {
+          return Result$Error(Error$NotAllowed());
+        }
+        return Result$Ok(extractAuthenticationFields(credential));
+      })
+      .catch((error) => Result$Error(classifyJsError(error)));
+  });
 
   return [promise, () => controller.abort()];
 }

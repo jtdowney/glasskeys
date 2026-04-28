@@ -71,3 +71,6 @@ pub fn last_get_snapshot() -> Result(GetSnapshot, Nil)
 
 @external(javascript, "../glasskey_test_ffi.mjs", "lastGetSignalAborted")
 pub fn last_get_signal_aborted() -> Result(Bool, Nil)
+
+@external(javascript, "../glasskey_test_ffi.mjs", "setConditionalMediationAvailable")
+pub fn set_conditional_mediation_available(available: Bool) -> Nil

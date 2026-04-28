@@ -63,6 +63,7 @@ fn login(state: model.LoginState) -> Element(model.Msg) {
 
 fn is_login_loading(state: model.LoginState) -> Bool {
   case state {
+    model.LoginCheckingAutofill -> False
     model.LoginSettingUpConditional -> False
     model.LoginConditional(..) -> False
     model.LoginReady(..) -> False

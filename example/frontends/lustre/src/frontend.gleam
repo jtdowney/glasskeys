@@ -81,9 +81,9 @@ fn apply_route(
     )
     router.Login -> #(
       model.Unauthenticated(page: model.LoginPage(
-        state: model.LoginSettingUpConditional,
+        state: model.LoginCheckingAutofill,
       )),
-      effect.map(api.login_begin(model.BackendBeganLogin), model.LoginMsg),
+      effect.map(check_autofill_support_effect(), model.LoginMsg),
     )
     router.Welcome -> welcome_route(m)
     router.NotFound(uri:) -> #(
@@ -204,6 +204,18 @@ fn update_login(
         api.login_begin(model.BackendBeganModalLogin),
       )
     }
+    model.LoginCheckingAutofill, model.AutofillSupportChecked(True) -> #(
+      model.Unauthenticated(page: model.LoginPage(
+        state: model.LoginSettingUpConditional,
+      )),
+      api.login_begin(model.BackendBeganLogin),
+    )
+    model.LoginCheckingAutofill, model.AutofillSupportChecked(False) -> #(
+      model.Unauthenticated(
+        page: model.LoginPage(state: model.LoginReady(status: "")),
+      ),
+      effect.none(),
+    )
     model.LoginSettingUpConditional, model.BackendBeganLogin(Ok(options)) ->
       start_conditional(options)
     model.LoginSettingUpConditional, model.BackendBeganLogin(Error(message)) -> #(
@@ -311,6 +323,16 @@ fn await_conditional_authentication_effect(
     result
     |> promise.map(fn(r) {
       dispatch(model.AuthenticatorFinishedConditionalLogin(r))
+    })
+    Nil
+  })
+}
+
+fn check_autofill_support_effect() -> Effect(model.LoginMsg) {
+  effect.from(fn(dispatch) {
+    glasskey.supports_webauthn_autofill()
+    |> promise.map(fn(supported) {
+      dispatch(model.AutofillSupportChecked(supported))
     })
     Nil
   })
