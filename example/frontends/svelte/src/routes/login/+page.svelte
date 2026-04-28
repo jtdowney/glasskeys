@@ -5,6 +5,7 @@
 
   let status = $state("");
   let busy = $state(false);
+  let username = $state("");
 
   function isBenignAbort(err) {
     const name = err?.name ?? "";
@@ -34,12 +35,13 @@
     };
   });
 
-  async function handleLogin() {
+  async function handleLogin(event) {
+    event?.preventDefault?.();
     WebAuthnAbortService.cancelCeremony();
     busy = true;
     status = "Waiting for authenticator...";
     try {
-      const who = await login();
+      const who = await login(username);
       finishLogin(who);
     } catch (err) {
       status = `Error: ${err.message ?? err}`;
@@ -54,19 +56,20 @@
 </svelte:head>
 
 <h1>Sign In</h1>
-<div class="stack">
-  <!-- The browser attaches the WebAuthn autofill picker to this input via
-       autocomplete="... webauthn"; the value is never read by our JS. -->
+<form class="stack" onsubmit={handleLogin}>
+  <!-- The `webauthn` autocomplete token anchors the browser's passkey autofill
+       picker. When autofill is dismissed, the typed value is sent to the
+       backend so credentials are filtered to that user. -->
   <input
     type="text"
     name="username"
     placeholder="Username"
     autocomplete="username webauthn"
+    bind:value={username}
+    disabled={busy}
   />
-  <button type="button" disabled={busy} onclick={handleLogin}
-    >Sign in with passkey</button
-  >
-</div>
+  <button type="submit" disabled={busy}>Sign in with passkey</button>
+</form>
 {#if status}
   <p class="status">{status}</p>
 {/if}

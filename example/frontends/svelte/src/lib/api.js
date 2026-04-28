@@ -34,15 +34,15 @@ export async function register(username) {
   if (!verified) throw new Error("registration not verified");
 }
 
-export async function login() {
-  const { options } = await postJson("/api/login/begin", {});
+export async function login(username = "") {
+  const { options } = await postJson("/api/login/begin", { username });
   const response = await startAuthentication({ optionsJSON: options });
   return completeLogin(response);
 }
 
 export async function loginWithAutofill() {
   if (!(await browserSupportsWebAuthnAutofill())) return null;
-  const { options } = await postJson("/api/login/begin", {});
+  const { options } = await postJson("/api/login/begin", { username: "" });
   const response = await startAuthentication({
     optionsJSON: options,
     useBrowserAutofill: true,

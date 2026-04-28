@@ -10,7 +10,8 @@ pub fn root(m: model.Model) -> Element(model.Msg) {
   html.main([attribute.class("app")], [
     case m {
       model.Unauthenticated(page: model.HomePage) -> home()
-      model.Unauthenticated(page: model.LoginPage(state:)) -> login(state)
+      model.Unauthenticated(page: model.LoginPage(state:, username:)) ->
+        login(state, username)
       model.Unauthenticated(page: model.NotFoundPage(uri:)) -> not_found(uri)
       model.Registering(state:) -> register(state)
       model.Authenticated(username:) -> welcome(username)
@@ -37,27 +38,35 @@ fn home() -> Element(model.Msg) {
   ])
 }
 
-fn login(state: model.LoginState) -> Element(model.Msg) {
+fn login(state: model.LoginState, username: String) -> Element(model.Msg) {
   let loading = is_login_loading(state)
   html.div([], [
     html.h1([], [html.text("Sign In")]),
-    html.div([attribute.class("stack")], [
-      // Anchors browser passkey autofill via the `webauthn` autocomplete
-      // token during conditional mediation; the value is never submitted.
-      html.input([
-        attribute.type_("text"),
-        attribute.name("username"),
-        attribute.placeholder("Username"),
-        attribute.attribute("autocomplete", "username webauthn"),
-      ]),
-      html.button(
-        [
-          event.on_click(model.LoginMsg(model.UserClickedLogin)),
+    html.form(
+      [
+        attribute.class("stack"),
+        event.on_submit(fn(_) { model.LoginMsg(model.UserClickedLogin) }),
+      ],
+      [
+        // The `webauthn` autocomplete token anchors browser passkey autofill
+        // during conditional mediation. When autofill is dismissed, the typed
+        // value is sent to the backend so credentials are filtered to that user.
+        html.input([
+          attribute.type_("text"),
+          attribute.name("username"),
+          attribute.placeholder("Username"),
+          attribute.attribute("autocomplete", "username webauthn"),
+          attribute.value(username),
           attribute.disabled(loading),
-        ],
-        [html.text("Sign in with passkey")],
-      ),
-    ]),
+          event.on_input(fn(text) {
+            model.LoginMsg(model.UserTypedLoginUsername(text))
+          }),
+        ]),
+        html.button([attribute.disabled(loading)], [
+          html.text("Sign in with passkey"),
+        ]),
+      ],
+    ),
     status(login_status(state)),
     back_link(),
   ])

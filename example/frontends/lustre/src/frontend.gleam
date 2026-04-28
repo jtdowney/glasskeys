@@ -57,8 +57,8 @@ fn dispatch_login(
   msg: model.LoginMsg,
 ) -> #(model.Model, Effect(model.Msg)) {
   case m {
-    model.Unauthenticated(page: model.LoginPage(state:)) -> {
-      let #(next, eff) = update_login(state, msg)
+    model.Unauthenticated(page: model.LoginPage(state:, username:)) -> {
+      let #(next, eff) = update_login(state, username, msg)
       #(next, effect.map(eff, model.LoginMsg))
     }
     _ -> #(m, effect.none())
@@ -82,6 +82,7 @@ fn apply_route(
     router.Login -> #(
       model.Unauthenticated(page: model.LoginPage(
         state: model.LoginCheckingAutofill,
+        username: "",
       )),
       effect.map(check_autofill_support_effect(), model.LoginMsg),
     )
@@ -112,9 +113,10 @@ fn previous_username(m: model.Model) -> Result(String, Nil) {
 
 fn abort_conditional(m: model.Model) -> model.Model {
   case m {
-    model.Unauthenticated(page: model.LoginPage(state: model.LoginConditional(
-      abort:,
-    ))) -> {
+    model.Unauthenticated(page: model.LoginPage(
+      state: model.LoginConditional(abort:),
+      ..,
+    )) -> {
       abort()
       m
     }
@@ -189,128 +191,102 @@ fn update_register(
 
 fn update_login(
   state: model.LoginState,
+  username: String,
   msg: model.LoginMsg,
 ) -> #(model.Model, Effect(model.LoginMsg)) {
   case state, msg {
+    _, model.UserTypedLoginUsername(typed) -> #(
+      login_model(state, typed),
+      effect.none(),
+    )
     _, model.UserClickedLogin -> {
       case state {
         model.LoginConditional(abort:) -> abort()
         _ -> Nil
       }
       #(
-        model.Unauthenticated(page: model.LoginPage(
-          state: model.LoginModalBeginning,
-        )),
-        api.login_begin(model.BackendBeganModalLogin),
+        login_model(model.LoginModalBeginning, username),
+        api.login_begin(username, model.BackendBeganModalLogin),
       )
     }
     model.LoginCheckingAutofill, model.AutofillSupportChecked(True) -> #(
-      model.Unauthenticated(page: model.LoginPage(
-        state: model.LoginSettingUpConditional,
-      )),
-      api.login_begin(model.BackendBeganLogin),
+      login_model(model.LoginSettingUpConditional, username),
+      api.login_begin("", model.BackendBeganLogin),
     )
     model.LoginCheckingAutofill, model.AutofillSupportChecked(False) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(status: "")),
-      ),
+      login_model(model.LoginReady(status: ""), username),
       effect.none(),
     )
     model.LoginSettingUpConditional, model.BackendBeganLogin(Ok(options)) ->
-      start_conditional(options)
+      start_conditional(options, username)
     model.LoginSettingUpConditional, model.BackendBeganLogin(Error(message)) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(
-          status: "Error: " <> message,
-        )),
-      ),
+      login_model(model.LoginReady(status: "Error: " <> message), username),
       effect.none(),
     )
     model.LoginModalBeginning, model.BackendBeganModalLogin(Ok(options)) -> #(
-      model.Unauthenticated(page: model.LoginPage(
-        state: model.LoginModalAwaiting,
-      )),
+      login_model(model.LoginModalAwaiting, username),
       authentication_effect(options),
     )
     model.LoginModalBeginning, model.BackendBeganModalLogin(Error(message)) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(
-          status: "Error: " <> message,
-        )),
-      ),
+      login_model(model.LoginReady(status: "Error: " <> message), username),
       effect.none(),
     )
     model.LoginModalAwaiting, model.AuthenticatorFinishedLogin(Ok(response)) -> #(
-      model.Unauthenticated(page: model.LoginPage(state: model.LoginVerifying)),
+      login_model(model.LoginVerifying, username),
       api.login_complete(response, model.BackendFinishedLogin),
     )
     model.LoginModalAwaiting, model.AuthenticatorFinishedLogin(Error(error)) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(
-          status: "Error: " <> glasskey_error_to_string(error),
-        )),
+      login_model(
+        model.LoginReady(status: "Error: " <> glasskey_error_to_string(error)),
+        username,
       ),
       effect.none(),
     )
     model.LoginConditional(..),
       model.AuthenticatorFinishedConditionalLogin(Ok(response))
     -> #(
-      model.Unauthenticated(page: model.LoginPage(state: model.LoginVerifying)),
+      login_model(model.LoginVerifying, username),
       api.login_complete(response, model.BackendFinishedLogin),
     )
     model.LoginConditional(..),
       model.AuthenticatorFinishedConditionalLogin(Error(glasskey.Aborted))
-    -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(status: "")),
-      ),
-      effect.none(),
-    )
+    -> #(login_model(model.LoginReady(status: ""), username), effect.none())
     model.LoginConditional(..),
       model.AuthenticatorFinishedConditionalLogin(Error(error))
     -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(
-          status: "Error: " <> glasskey_error_to_string(error),
-        )),
+      login_model(
+        model.LoginReady(status: "Error: " <> glasskey_error_to_string(error)),
+        username,
       ),
       effect.none(),
     )
-    model.LoginVerifying, model.BackendFinishedLogin(Ok(username)) -> #(
-      model.Authenticated(username:),
+    model.LoginVerifying, model.BackendFinishedLogin(Ok(verified_username)) -> #(
+      model.Authenticated(username: verified_username),
       modem.push(router.to_path(router.Welcome), option.None, option.None),
     )
     model.LoginVerifying, model.BackendFinishedLogin(Error(message)) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(
-          status: "Error: " <> message,
-        )),
-      ),
+      login_model(model.LoginReady(status: "Error: " <> message), username),
       effect.none(),
     )
-    _, _ -> #(
-      model.Unauthenticated(page: model.LoginPage(state:)),
-      effect.none(),
-    )
+    _, _ -> #(login_model(state, username), effect.none())
   }
+}
+
+fn login_model(state: model.LoginState, username: String) -> model.Model {
+  model.Unauthenticated(page: model.LoginPage(state:, username:))
 }
 
 fn start_conditional(
   options: glasskey.AuthenticationOptions,
+  username: String,
 ) -> #(model.Model, Effect(model.LoginMsg)) {
   case glasskey.start_conditional_authentication(options) {
     Ok(conditional) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginConditional(
-          abort: conditional.abort,
-        )),
-      ),
+      login_model(model.LoginConditional(abort: conditional.abort), username),
       await_conditional_authentication_effect(conditional.result),
     )
     Error(_) -> #(
-      model.Unauthenticated(
-        page: model.LoginPage(state: model.LoginReady(status: "")),
-      ),
+      login_model(model.LoginReady(status: ""), username),
       effect.none(),
     )
   }

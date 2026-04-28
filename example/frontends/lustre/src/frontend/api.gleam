@@ -7,9 +7,10 @@ import lustre/effect.{type Effect}
 import rsvp
 
 pub fn login_begin(
+  username: String,
   handler: fn(Result(glasskey.AuthenticationOptions, String)) -> msg,
 ) -> Effect(msg) {
-  let body = json.object([])
+  let body = json.object([#("username", json.string(username))])
 
   let expect =
     rsvp.expect_ok_response(fn(result) { handler(decode_login_begin(result)) })

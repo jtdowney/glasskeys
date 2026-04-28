@@ -14,11 +14,38 @@ const session_cookie = "authentication"
 const session_max_age = 300
 
 pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
+  use body <- wisp.require_string_body(req)
+
+  let decoder = {
+    use username <- decode.optional_field("username", "", decode.string)
+    decode.success(username)
+  }
+
+  let username = case json.parse(body, decoder) {
+    Ok(value) -> value
+    Error(_) -> ""
+  }
+
+  let allow_credentials = case username {
+    "" -> []
+    name ->
+      case credentials.get_user(ctx.credentials, name) {
+        Ok(user) -> list.map(user.credentials, fn(cred) { cred.id })
+        Error(_) -> []
+      }
+  }
+
+  let options =
+    authentication.Options(
+      ..authentication.default_options(),
+      allow_credentials:,
+    )
+
   let assert Ok(#(options_json, challenge)) =
     authentication.request(
       relying_party_id: ctx.rp_id,
       origins: ctx.origins,
-      options: authentication.default_options(),
+      options:,
     )
 
   let encoded = authentication.encode_challenge(challenge)

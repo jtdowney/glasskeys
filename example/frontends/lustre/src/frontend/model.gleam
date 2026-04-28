@@ -10,7 +10,7 @@ pub type Model {
 
 pub type UnauthenticatedPage {
   HomePage
-  LoginPage(state: LoginState)
+  LoginPage(state: LoginState, username: String)
   NotFoundPage(uri: Uri)
 }
 
@@ -47,6 +47,7 @@ pub type RegisterMsg {
 
 pub type LoginMsg {
   UserClickedLogin
+  UserTypedLoginUsername(String)
   AutofillSupportChecked(Bool)
   BackendBeganLogin(Result(glasskey.AuthenticationOptions, String))
   BackendBeganModalLogin(Result(glasskey.AuthenticationOptions, String))
