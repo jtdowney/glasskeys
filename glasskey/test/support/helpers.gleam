@@ -26,6 +26,9 @@ pub type GetSnapshot {
 @external(javascript, "../glasskey_test_ffi.mjs", "installFakeNavigator")
 pub fn install_default_fake_navigator() -> Nil
 
+@external(javascript, "../glasskey_test_ffi.mjs", "installFakeNavigatorMinimal")
+pub fn install_minimal_fake_navigator() -> Nil
+
 @external(javascript, "../glasskey_test_ffi.mjs", "uninstallFakeNavigator")
 pub fn uninstall_fake_navigator() -> Nil
 
@@ -74,3 +77,6 @@ pub fn last_get_signal_aborted() -> Result(Bool, Nil)
 
 @external(javascript, "../glasskey_test_ffi.mjs", "setConditionalMediationAvailable")
 pub fn set_conditional_mediation_available(available: Bool) -> Nil
+
+@external(javascript, "../glasskey_test_ffi.mjs", "setPlatformAuthenticatorAvailable")
+pub fn set_platform_authenticator_available(available: Bool) -> Nil

@@ -873,6 +873,68 @@ pub fn supports_webauthn_returns_true_with_fake_navigator_test() {
   assert result
 }
 
+pub fn platform_authenticator_available_returns_false_without_globals_test() {
+  helpers.uninstall_fake_navigator()
+  use result <- promise.await(glasskey.platform_authenticator_available())
+  assert !result
+  promise.resolve(Nil)
+}
+
+pub fn platform_authenticator_available_returns_true_when_supported_test() {
+  use <- with_fake_navigator
+  helpers.set_platform_authenticator_available(True)
+  use result <- promise.await(glasskey.platform_authenticator_available())
+  assert result
+  promise.resolve(Nil)
+}
+
+pub fn platform_authenticator_available_returns_false_when_unsupported_test() {
+  use <- with_fake_navigator
+  helpers.set_platform_authenticator_available(False)
+  use result <- promise.await(glasskey.platform_authenticator_available())
+  assert !result
+  promise.resolve(Nil)
+}
+
+pub fn platform_authenticator_available_returns_false_when_method_missing_test() {
+  helpers.install_minimal_fake_navigator()
+  use result <- promise.await(glasskey.platform_authenticator_available())
+  helpers.uninstall_fake_navigator()
+  assert !result
+  promise.resolve(Nil)
+}
+
+pub fn supports_webauthn_autofill_returns_false_without_globals_test() {
+  helpers.uninstall_fake_navigator()
+  use result <- promise.await(glasskey.supports_webauthn_autofill())
+  assert !result
+  promise.resolve(Nil)
+}
+
+pub fn supports_webauthn_autofill_returns_true_when_supported_test() {
+  use <- with_fake_navigator
+  helpers.set_conditional_mediation_available(True)
+  use result <- promise.await(glasskey.supports_webauthn_autofill())
+  assert result
+  promise.resolve(Nil)
+}
+
+pub fn supports_webauthn_autofill_returns_false_when_unsupported_test() {
+  use <- with_fake_navigator
+  helpers.set_conditional_mediation_available(False)
+  use result <- promise.await(glasskey.supports_webauthn_autofill())
+  assert !result
+  promise.resolve(Nil)
+}
+
+pub fn supports_webauthn_autofill_returns_false_when_method_missing_test() {
+  helpers.install_minimal_fake_navigator()
+  use result <- promise.await(glasskey.supports_webauthn_autofill())
+  helpers.uninstall_fake_navigator()
+  assert !result
+  promise.resolve(Nil)
+}
+
 pub fn start_registration_returns_not_supported_when_globals_missing_test() {
   helpers.uninstall_fake_navigator()
   use result <- promise.await(

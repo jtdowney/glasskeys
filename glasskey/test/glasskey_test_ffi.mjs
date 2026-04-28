@@ -29,6 +29,7 @@ let lastGetSignal = null;
 let createBehavior = { kind: "credential", value: null };
 let getBehavior = { kind: "credential", value: null };
 let conditionalMediationAvailable = true;
+let platformAuthenticatorAvailable = true;
 
 function snapshotGlobal(key) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
@@ -94,18 +95,36 @@ export function installFakeNavigator() {
   createBehavior = { kind: "credential", value: null };
   getBehavior = { kind: "credential", value: null };
   conditionalMediationAvailable = true;
+  platformAuthenticatorAvailable = true;
 
   class FakePublicKeyCredential {
     static async isConditionalMediationAvailable() {
       return conditionalMediationAvailable;
     }
     static async isUserVerifyingPlatformAuthenticatorAvailable() {
-      return true;
+      return platformAuthenticatorAvailable;
     }
   }
 
   setGlobal("window", { PublicKeyCredential: FakePublicKeyCredential });
   setGlobal("PublicKeyCredential", FakePublicKeyCredential);
+  setGlobal("DOMException", FakeDOMException);
+  setGlobal("navigator", { credentials: makeFakeCredentials() });
+}
+
+export function installFakeNavigatorMinimal() {
+  uninstallFakeNavigator();
+  originalState = {
+    window: snapshotGlobal("window"),
+    navigator: snapshotGlobal("navigator"),
+    PublicKeyCredential: snapshotGlobal("PublicKeyCredential"),
+    DOMException: snapshotGlobal("DOMException"),
+  };
+
+  class MinimalFakePublicKeyCredential {}
+
+  setGlobal("window", { PublicKeyCredential: MinimalFakePublicKeyCredential });
+  setGlobal("PublicKeyCredential", MinimalFakePublicKeyCredential);
   setGlobal("DOMException", FakeDOMException);
   setGlobal("navigator", { credentials: makeFakeCredentials() });
 }
@@ -189,6 +208,10 @@ export function setGetDomException(name, message) {
 
 export function setConditionalMediationAvailable(available) {
   conditionalMediationAvailable = available;
+}
+
+export function setPlatformAuthenticatorAvailable(available) {
+  platformAuthenticatorAvailable = available;
 }
 
 function challengeBitArray(value) {
