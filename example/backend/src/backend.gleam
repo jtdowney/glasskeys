@@ -24,6 +24,8 @@ pub fn main() {
 
   let origins =
     envoy.get("ORIGINS") |> result.unwrap(default_origins) |> parse_origins
+  let assert [_, ..] = origins
+    as "ORIGINS must contain at least one non-empty origin"
 
   let ctx =
     web.Context(
