@@ -6,7 +6,7 @@ import gleam/dynamic/decode
 import gleam/javascript/promise.{type Promise}
 import gleam/json
 import gleam/list
-import gleam/option
+import gleam/option.{type Option}
 import gleam/string
 import qcheck
 import support/fixtures
@@ -26,11 +26,11 @@ type RegistrationFixture {
     user_name: String,
     user_display_name: String,
     algorithms: List(Int),
-    timeout: option.Option(Int),
+    timeout: Option(Int),
     attestation: String,
-    resident_key: String,
-    user_verification: String,
-    authenticator_attachment: option.Option(String),
+    resident_key: Option(String),
+    user_verification: Option(String),
+    authenticator_attachment: Option(String),
     exclude_credentials: List(String),
   )
 }
@@ -46,8 +46,8 @@ fn default_registration_fixture() -> RegistrationFixture {
     algorithms: [-7],
     timeout: option.None,
     attestation: "none",
-    resident_key: "preferred",
-    user_verification: "preferred",
+    resident_key: option.Some("preferred"),
+    user_verification: option.Some("preferred"),
     authenticator_attachment: option.None,
     exclude_credentials: [],
   )
@@ -64,8 +64,8 @@ fn default_registration_options() -> glasskey.RegistrationOptions {
     algorithms: [glasskey.Es256, glasskey.Ed25519, glasskey.Rs256],
     timeout: option.None,
     attestation: glasskey.AttestationNone,
-    resident_key: glasskey.Required,
-    user_verification: glasskey.Preferred,
+    resident_key: option.Some(glasskey.Required),
+    user_verification: option.Some(glasskey.Preferred),
     authenticator_attachment: option.None,
     exclude_credentials: [],
   )
@@ -89,13 +89,21 @@ fn with_fake_navigator(body: fn() -> Promise(Nil)) -> Promise(Nil) {
 }
 
 fn build_registration_options(fixture: RegistrationFixture) -> Dynamic {
-  let auth_selection_fields = [
-    #(dynamic.string("residentKey"), dynamic.string(fixture.resident_key)),
-    #(
-      dynamic.string("userVerification"),
-      dynamic.string(fixture.user_verification),
-    ),
-  ]
+  let auth_selection_fields = []
+  let auth_selection_fields = case fixture.resident_key {
+    option.Some(value) -> [
+      #(dynamic.string("residentKey"), dynamic.string(value)),
+      ..auth_selection_fields
+    ]
+    option.None -> auth_selection_fields
+  }
+  let auth_selection_fields = case fixture.user_verification {
+    option.Some(value) -> [
+      #(dynamic.string("userVerification"), dynamic.string(value)),
+      ..auth_selection_fields
+    ]
+    option.None -> auth_selection_fields
+  }
   let auth_selection_fields = case fixture.authenticator_attachment {
     option.Some(value) -> [
       #(dynamic.string("authenticatorAttachment"), dynamic.string(value)),
@@ -136,11 +144,17 @@ fn build_registration_options(fixture: RegistrationFixture) -> Dynamic {
     ),
     #(dynamic.string("pubKeyCredParams"), pub_key_cred_params),
     #(dynamic.string("attestation"), dynamic.string(fixture.attestation)),
-    #(
-      dynamic.string("authenticatorSelection"),
-      dynamic.properties(auth_selection_fields),
-    ),
   ]
+  let fields = case auth_selection_fields {
+    [] -> fields
+    _ -> [
+      #(
+        dynamic.string("authenticatorSelection"),
+        dynamic.properties(auth_selection_fields),
+      ),
+      ..fields
+    ]
+  }
 
   let fields = case fixture.timeout {
     option.Some(t) -> [#(dynamic.string("timeout"), dynamic.int(t)), ..fields]
@@ -193,8 +207,8 @@ pub fn decode_registration_options_test() {
   assert opt.algorithms == [glasskey.Es256]
   assert opt.timeout == option.Some(60_000)
   assert opt.attestation == glasskey.AttestationNone
-  assert opt.resident_key == glasskey.Preferred
-  assert opt.user_verification == glasskey.Preferred
+  assert opt.resident_key == option.Some(glasskey.Preferred)
+  assert opt.user_verification == option.Some(glasskey.Preferred)
   assert opt.authenticator_attachment == option.None
   assert opt.exclude_credentials == []
 }
@@ -247,12 +261,12 @@ pub fn decode_registration_options_resident_key_variants_test() {
       build_registration_options(
         RegistrationFixture(
           ..default_registration_fixture(),
-          resident_key: string,
+          resident_key: option.Some(string),
         ),
       )
     let assert Ok(opt) =
       decode.run(dyn, glasskey.registration_options_decoder())
-    assert opt.resident_key == expected
+    assert opt.resident_key == option.Some(expected)
   })
 }
 
@@ -269,12 +283,12 @@ pub fn decode_registration_options_user_verification_variants_test() {
       build_registration_options(
         RegistrationFixture(
           ..default_registration_fixture(),
-          user_verification: string,
+          user_verification: option.Some(string),
         ),
       )
     let assert Ok(opt) =
       decode.run(dyn, glasskey.registration_options_decoder())
-    assert opt.user_verification == expected
+    assert opt.user_verification == option.Some(expected)
   })
 }
 
@@ -353,12 +367,12 @@ pub fn decode_registration_options_omits_authenticator_selection_test() {
     ])
 
   let assert Ok(opt) = decode.run(dyn, glasskey.registration_options_decoder())
-  assert opt.resident_key == glasskey.Preferred
-  assert opt.user_verification == glasskey.Preferred
+  assert opt.resident_key == option.None
+  assert opt.user_verification == option.None
   assert opt.authenticator_attachment == option.None
 }
 
-pub fn decode_registration_options_authenticator_selection_inner_defaults_test() {
+pub fn decode_registration_options_authenticator_selection_inner_omitted_test() {
   let dyn =
     dynamic.properties([
       #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
@@ -390,8 +404,8 @@ pub fn decode_registration_options_authenticator_selection_inner_defaults_test()
     ])
 
   let assert Ok(opt) = decode.run(dyn, glasskey.registration_options_decoder())
-  assert opt.resident_key == glasskey.Preferred
-  assert opt.user_verification == glasskey.Preferred
+  assert opt.resident_key == option.None
+  assert opt.user_verification == option.None
   assert opt.authenticator_attachment == option.None
 }
 
@@ -405,7 +419,7 @@ pub fn decode_registration_options_unknown_requirement_test() {
     build_registration_options(
       RegistrationFixture(
         ..default_registration_fixture(),
-        resident_key: "typo-required",
+        resident_key: option.Some("typo-required"),
       ),
     )
 
@@ -1051,8 +1065,9 @@ pub fn start_registration_passes_options_to_navigator_test() {
   assert snapshot.timeout == option.Some(60_000)
   assert snapshot.authenticator_attachment == option.Some("platform")
   assert snapshot.exclude_credential_count == 2
-  assert snapshot.resident_key == "required"
-  assert snapshot.user_verification == "preferred"
+  assert snapshot.has_authenticator_selection
+  assert snapshot.resident_key == option.Some("required")
+  assert snapshot.user_verification == option.Some("preferred")
   assert snapshot.attestation == "none"
   assert snapshot.algs == [-7, -8, -257]
 
@@ -1075,6 +1090,60 @@ pub fn start_registration_omits_optional_fields_when_none_test() {
   assert snapshot.timeout == option.None
   assert snapshot.authenticator_attachment == option.None
   assert snapshot.exclude_credential_count == 0
+
+  promise.resolve(Nil)
+}
+
+pub fn start_registration_omits_authenticator_selection_when_all_none_test() {
+  use <- with_fake_navigator
+  helpers.set_create_credential(
+    raw_id: <<>>,
+    client_data_json: <<>>,
+    attestation_object: <<>>,
+  )
+
+  let opts =
+    glasskey.RegistrationOptions(
+      ..default_registration_options(),
+      resident_key: option.None,
+      user_verification: option.None,
+      authenticator_attachment: option.None,
+    )
+
+  use _ <- promise.await(glasskey.start_registration(opts))
+  let assert Ok(snapshot) = helpers.last_create_snapshot()
+
+  assert !snapshot.has_authenticator_selection
+  assert snapshot.resident_key == option.None
+  assert snapshot.user_verification == option.None
+  assert snapshot.authenticator_attachment == option.None
+
+  promise.resolve(Nil)
+}
+
+pub fn start_registration_omits_inner_authenticator_selection_fields_when_none_test() {
+  use <- with_fake_navigator
+  helpers.set_create_credential(
+    raw_id: <<>>,
+    client_data_json: <<>>,
+    attestation_object: <<>>,
+  )
+
+  let opts =
+    glasskey.RegistrationOptions(
+      ..default_registration_options(),
+      resident_key: option.Some(glasskey.Required),
+      user_verification: option.None,
+      authenticator_attachment: option.None,
+    )
+
+  use _ <- promise.await(glasskey.start_registration(opts))
+  let assert Ok(snapshot) = helpers.last_create_snapshot()
+
+  assert snapshot.has_authenticator_selection
+  assert snapshot.resident_key == option.Some("required")
+  assert snapshot.user_verification == option.None
+  assert snapshot.authenticator_attachment == option.None
 
   promise.resolve(Nil)
 }

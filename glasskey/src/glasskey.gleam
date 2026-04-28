@@ -145,8 +145,8 @@ pub type RegistrationOptions {
     algorithms: List(Algorithm),
     timeout: Option(Int),
     attestation: Attestation,
-    resident_key: Requirement,
-    user_verification: Requirement,
+    resident_key: Option(Requirement),
+    user_verification: Option(Requirement),
     authenticator_attachment: Option(AuthenticatorAttachment),
     exclude_credentials: List(BitArray),
   )
@@ -164,8 +164,8 @@ pub type Requirement {
 
 type AuthenticatorSelection {
   AuthenticatorSelection(
-    resident_key: String,
-    user_verification: String,
+    resident_key: Option(String),
+    user_verification: Option(String),
     authenticator_attachment: Option(String),
   )
 }
@@ -413,7 +413,7 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
   )
   use #(resident_key, user_verification, authenticator_attachment) <- decode.optional_field(
     "authenticatorSelection",
-    #(Preferred, Preferred, option.None),
+    #(option.None, option.None, option.None),
     authenticator_selection_decoder(),
   )
   use exclude_credentials <- decode.optional_field(
@@ -464,17 +464,17 @@ fn attestation_decoder() -> decode.Decoder(Attestation) {
 }
 
 fn authenticator_selection_decoder() -> decode.Decoder(
-  #(Requirement, Requirement, Option(AuthenticatorAttachment)),
+  #(Option(Requirement), Option(Requirement), Option(AuthenticatorAttachment)),
 ) {
   use resident_key <- decode.optional_field(
     "residentKey",
-    Preferred,
-    requirement_decoder(),
+    option.None,
+    decode.map(requirement_decoder(), option.Some),
   )
   use user_verification <- decode.optional_field(
     "userVerification",
-    Preferred,
-    requirement_decoder(),
+    option.None,
+    decode.map(requirement_decoder(), option.Some),
   )
   use authenticator_attachment <- decode.optional_field(
     "authenticatorAttachment",
@@ -569,8 +569,11 @@ fn to_create_options(options: RegistrationOptions) -> CreateOptions {
     timeout: options.timeout,
     attestation: attestation_to_string(options.attestation),
     authenticator_selection: AuthenticatorSelection(
-      resident_key: requirement_to_string(options.resident_key),
-      user_verification: requirement_to_string(options.user_verification),
+      resident_key: option.map(options.resident_key, requirement_to_string),
+      user_verification: option.map(
+        options.user_verification,
+        requirement_to_string,
+      ),
       authenticator_attachment: option.map(
         options.authenticator_attachment,
         authenticator_attachment_to_string,

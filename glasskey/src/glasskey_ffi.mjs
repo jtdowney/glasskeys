@@ -39,20 +39,29 @@ export async function createCredential(opts) {
     },
     pubKeyCredParams: toPublicKeyCredParams(opts.pub_key_cred_params),
     attestation: opts.attestation,
-    authenticatorSelection: {
-      residentKey: opts.authenticator_selection.resident_key,
-      userVerification: opts.authenticator_selection.user_verification,
-    },
   };
+
+  const sel = opts.authenticator_selection;
+  const authenticatorSelection = {};
+  if (Option$isSome(sel.resident_key)) {
+    authenticatorSelection.residentKey = Option$Some$0(sel.resident_key);
+  }
+  if (Option$isSome(sel.user_verification)) {
+    authenticatorSelection.userVerification = Option$Some$0(
+      sel.user_verification,
+    );
+  }
+  if (Option$isSome(sel.authenticator_attachment)) {
+    authenticatorSelection.authenticatorAttachment = Option$Some$0(
+      sel.authenticator_attachment,
+    );
+  }
+  if (Object.keys(authenticatorSelection).length > 0) {
+    publicKey.authenticatorSelection = authenticatorSelection;
+  }
 
   if (Option$isSome(opts.timeout)) {
     publicKey.timeout = Option$Some$0(opts.timeout);
-  }
-
-  if (Option$isSome(opts.authenticator_selection.authenticator_attachment)) {
-    publicKey.authenticatorSelection.authenticatorAttachment = Option$Some$0(
-      opts.authenticator_selection.authenticator_attachment,
-    );
   }
 
   if (opts.exclude_credentials.length > 0) {

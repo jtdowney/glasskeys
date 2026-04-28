@@ -7,8 +7,9 @@ pub type CreateSnapshot {
     timeout: Option(Int),
     authenticator_attachment: Option(String),
     exclude_credential_count: Int,
-    resident_key: String,
-    user_verification: String,
+    resident_key: Option(String),
+    user_verification: Option(String),
+    has_authenticator_selection: Bool,
     attestation: String,
     algs: List(Int),
   )
