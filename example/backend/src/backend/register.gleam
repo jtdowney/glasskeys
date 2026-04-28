@@ -6,6 +6,7 @@ import gleam/crypto
 import gleam/dynamic/decode
 import gleam/json
 import gleam/result
+import gleam/string
 import wisp
 
 const session_cookie = "registration"
@@ -30,7 +31,11 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
 
   case json.parse(body, decoder) {
     Error(_) -> error_response("invalid json", 400)
-    Ok(username) -> begin_registration(req, username, ctx)
+    Ok(username) ->
+      case string.trim(username) {
+        "" -> error_response("username required", 400)
+        trimmed -> begin_registration(req, trimmed, ctx)
+      }
   }
 }
 
