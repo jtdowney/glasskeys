@@ -103,12 +103,18 @@ fn register(state: model.RegisterState) -> Element(model.Msg) {
         attribute.value(username),
         attribute.disabled(loading),
         event.on_input(fn(text) {
-          model.RegisterMsg(model.UserTypedUsername(text))
+          model.RegisterMsg(
+            model.RegisterIdleAction(model.UserTypedUsername(text)),
+          )
         }),
       ]),
       html.button(
         [
-          event.on_click(model.RegisterMsg(model.UserClickedRegister)),
+          event.on_click(
+            model.RegisterMsg(model.RegisterIdleAction(
+              model.UserClickedRegister,
+            )),
+          ),
           attribute.disabled(loading || username == ""),
         ],
         [html.text("Register")],

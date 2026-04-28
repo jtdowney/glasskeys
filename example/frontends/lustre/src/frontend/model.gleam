@@ -38,10 +38,26 @@ pub type Msg {
 }
 
 pub type RegisterMsg {
+  RegisterIdleAction(RegisterIdleMsg)
+  RegisterBeginningAction(RegisterBeginningMsg)
+  RegisterAwaitingAction(RegisterAwaitingMsg)
+  RegisterVerifyingAction(RegisterVerifyingMsg)
+}
+
+pub type RegisterIdleMsg {
   UserTypedUsername(String)
   UserClickedRegister
+}
+
+pub type RegisterBeginningMsg {
   BackendBeganRegistration(Result(glasskey.RegistrationOptions, String))
+}
+
+pub type RegisterAwaitingMsg {
   AuthenticatorFinishedRegistration(Result(String, glasskey.Error))
+}
+
+pub type RegisterVerifyingMsg {
   BackendFinishedRegistration(Result(Nil, String))
 }
 

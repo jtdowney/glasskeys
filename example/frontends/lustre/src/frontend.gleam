@@ -128,64 +128,90 @@ fn update_register(
   state: model.RegisterState,
   msg: model.RegisterMsg,
 ) -> #(model.Model, Effect(model.RegisterMsg)) {
-  case state, msg {
-    model.RegisterIdle(..), model.UserTypedUsername(username) -> #(
-      model.Registering(state: model.RegisterIdle(username:, status: "")),
+  let #(next_state, eff) = case state, msg {
+    model.RegisterIdle(username:, ..), model.RegisterIdleAction(idle_msg) ->
+      update_register_idle(username, idle_msg)
+    model.RegisterBeginning(username:), model.RegisterBeginningAction(begin_msg)
+    -> update_register_beginning(username, begin_msg)
+    model.RegisterAwaitingAuthenticator(username:),
+      model.RegisterAwaitingAction(await_msg)
+    -> update_register_awaiting(username, await_msg)
+    model.RegisterVerifying(username:),
+      model.RegisterVerifyingAction(verify_msg)
+    -> update_register_verifying(username, verify_msg)
+    _, _ -> #(state, effect.none())
+  }
+  #(model.Registering(state: next_state), eff)
+}
+
+fn update_register_idle(
+  username: String,
+  msg: model.RegisterIdleMsg,
+) -> #(model.RegisterState, Effect(model.RegisterMsg)) {
+  case msg {
+    model.UserTypedUsername(typed) -> #(
+      model.RegisterIdle(username: typed, status: ""),
       effect.none(),
     )
-    model.RegisterIdle(username:, ..), model.UserClickedRegister -> #(
-      model.Registering(state: model.RegisterBeginning(username:)),
-      api.register_begin(username, model.BackendBeganRegistration),
+    model.UserClickedRegister -> #(
+      model.RegisterBeginning(username:),
+      api.register_begin(username, fn(result) {
+        model.RegisterBeginningAction(model.BackendBeganRegistration(result))
+      }),
     )
-    model.RegisterBeginning(username:),
-      model.BackendBeganRegistration(Ok(options))
-    -> #(
-      model.Registering(state: model.RegisterAwaitingAuthenticator(username:)),
+  }
+}
+
+fn update_register_beginning(
+  username: String,
+  msg: model.RegisterBeginningMsg,
+) -> #(model.RegisterState, Effect(model.RegisterMsg)) {
+  case msg {
+    model.BackendBeganRegistration(Ok(options)) -> #(
+      model.RegisterAwaitingAuthenticator(username:),
       registration_effect(options),
     )
-    model.RegisterBeginning(username:),
-      model.BackendBeganRegistration(Error(message))
-    -> #(
-      model.Registering(state: model.RegisterIdle(
-        username:,
-        status: "Error: " <> message,
-      )),
+    model.BackendBeganRegistration(Error(message)) -> #(
+      model.RegisterIdle(username:, status: "Error: " <> message),
       effect.none(),
     )
-    model.RegisterAwaitingAuthenticator(username:),
-      model.AuthenticatorFinishedRegistration(Ok(response))
-    -> #(
-      model.Registering(state: model.RegisterVerifying(username:)),
-      api.register_complete(response, model.BackendFinishedRegistration),
+  }
+}
+
+fn update_register_awaiting(
+  username: String,
+  msg: model.RegisterAwaitingMsg,
+) -> #(model.RegisterState, Effect(model.RegisterMsg)) {
+  case msg {
+    model.AuthenticatorFinishedRegistration(Ok(response)) -> #(
+      model.RegisterVerifying(username:),
+      api.register_complete(response, fn(result) {
+        model.RegisterVerifyingAction(model.BackendFinishedRegistration(result))
+      }),
     )
-    model.RegisterAwaitingAuthenticator(username:),
-      model.AuthenticatorFinishedRegistration(Error(error))
-    -> #(
-      model.Registering(state: model.RegisterIdle(
+    model.AuthenticatorFinishedRegistration(Error(error)) -> #(
+      model.RegisterIdle(
         username:,
         status: "Error: " <> glasskey_error_to_string(error),
-      )),
+      ),
       effect.none(),
     )
-    model.RegisterVerifying(username:),
-      model.BackendFinishedRegistration(Ok(Nil))
-    -> #(
-      model.Registering(state: model.RegisterIdle(
-        username:,
-        status: "Registration successful!",
-      )),
+  }
+}
+
+fn update_register_verifying(
+  username: String,
+  msg: model.RegisterVerifyingMsg,
+) -> #(model.RegisterState, Effect(model.RegisterMsg)) {
+  case msg {
+    model.BackendFinishedRegistration(Ok(Nil)) -> #(
+      model.RegisterIdle(username:, status: "Registration successful!"),
       effect.none(),
     )
-    model.RegisterVerifying(username:),
-      model.BackendFinishedRegistration(Error(message))
-    -> #(
-      model.Registering(state: model.RegisterIdle(
-        username:,
-        status: "Error: " <> message,
-      )),
+    model.BackendFinishedRegistration(Error(message)) -> #(
+      model.RegisterIdle(username:, status: "Error: " <> message),
       effect.none(),
     )
-    _, _ -> #(model.Registering(state:), effect.none())
   }
 }
 
@@ -332,7 +358,11 @@ fn registration_effect(
   effect.from(fn(dispatch) {
     glasskey.start_registration(options)
     |> promise.map(fn(result) {
-      dispatch(model.AuthenticatorFinishedRegistration(result))
+      dispatch(
+        model.RegisterAwaitingAction(model.AuthenticatorFinishedRegistration(
+          result,
+        )),
+      )
     })
     Nil
   })
