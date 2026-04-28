@@ -102,7 +102,11 @@ pub type Options {
     algorithms: List(Algorithm),
     /// Credential IDs to exclude (prevent re-registration).
     exclude_credentials: List(glasslock.CredentialId),
-    /// Allowed top-level origins for cross-origin iframe verification. Defaults to `[]`.
+    /// Allowed top-level origins for cross-origin iframe verification. The
+    /// allowlist is consulted only when the browser supplies a `topOrigin`
+    /// field; older browsers omit the field even for cross-origin requests,
+    /// in which case top-origin verification is skipped.
+    /// Defaults to `[]`.
     allowed_top_origins: List(String),
   )
 }

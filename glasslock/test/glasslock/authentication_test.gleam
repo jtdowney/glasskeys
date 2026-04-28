@@ -795,7 +795,7 @@ pub fn verify_rejects_unknown_top_origin_test() {
     == Error(authentication.VerificationMismatch(glasslock.TopOriginField))
 }
 
-pub fn verify_rejects_missing_top_origin_with_allowlist_test() {
+pub fn verify_accepts_missing_top_origin_with_allowlist_test() {
   let #(challenge, stored_credential, keypair) =
     setup_authentication_with(
       AuthSetup(
@@ -812,6 +812,31 @@ pub fn verify_rejects_missing_top_origin_with_allowlist_test() {
       origin: "https://example.com",
       cross_origin: True,
       top_origin: option.None,
+    )
+  let response_json =
+    signed_response(
+      challenge:,
+      stored: stored_credential,
+      keypair:,
+      sign_count: 1,
+      client_data_json:,
+    )
+
+  let assert Ok(cred) =
+    authentication.verify(response_json:, challenge:, stored: stored_credential)
+  assert cred.sign_count == 1
+}
+
+pub fn verify_rejects_top_origin_without_cross_origin_test() {
+  let #(challenge, stored_credential, keypair) = setup_authentication()
+
+  let client_data_json =
+    testing.build_client_data(
+      type_: "webauthn.get",
+      challenge: testing.authentication_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: False,
+      top_origin: option.Some("https://top.example.com"),
     )
   let response_json =
     signed_response(

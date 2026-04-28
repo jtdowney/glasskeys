@@ -84,7 +84,11 @@ pub type Options {
     allow_cross_origin: Bool,
     /// Credential IDs the user may authenticate with. Empty for discoverable flow.
     allow_credentials: List(glasslock.CredentialId),
-    /// Allowed top-level origins for cross-origin iframe verification. Defaults to `[]`.
+    /// Allowed top-level origins for cross-origin iframe verification. The
+    /// allowlist is consulted only when the browser supplies a `topOrigin`
+    /// field; older browsers omit the field even for cross-origin requests,
+    /// in which case top-origin verification is skipped.
+    /// Defaults to `[]`.
     allowed_top_origins: List(String),
   )
 }

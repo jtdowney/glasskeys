@@ -589,20 +589,25 @@ pub fn verify_client_data(
     return: Error(VerificationMismatch(glasslock.CrossOriginField)),
   )
   use <- bool.guard(
-    when: client_data.cross_origin
-      && !top_origin_allowed(client_data.top_origin, allowed_top_origins),
+    when: !top_origin_allowed(
+      client_data.cross_origin,
+      client_data.top_origin,
+      allowed_top_origins,
+    ),
     return: Error(VerificationMismatch(glasslock.TopOriginField)),
   )
   Ok(Nil)
 }
 
 fn top_origin_allowed(
+  cross_origin: Bool,
   top_origin: Option(String),
   allowed: List(String),
 ) -> Bool {
-  case top_origin {
-    option.Some(top) -> list.contains(allowed, top)
-    option.None -> list.is_empty(allowed)
+  case cross_origin, top_origin {
+    _, option.None -> True
+    True, option.Some(top) -> list.contains(allowed, top)
+    False, option.Some(_) -> False
   }
 }
 

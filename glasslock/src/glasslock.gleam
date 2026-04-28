@@ -95,7 +95,8 @@ pub type VerificationField {
   RelyingPartyIdField
   /// The `crossOrigin` field was `true` but cross-origin requests are not allowed.
   CrossOriginField
-  /// The `topOrigin` field did not match any allowed top-level origin.
+  /// The `topOrigin` field was either set without `crossOrigin: true`, or did
+  /// not match any allowed top-level origin.
   TopOriginField
   /// The `rawId` in the response did not match the credential ID in authenticator data.
   CredentialIdField
