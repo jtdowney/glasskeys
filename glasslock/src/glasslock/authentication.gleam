@@ -80,8 +80,6 @@ pub type Options {
     timeout: Duration,
     /// User verification requirement. Defaults to preferred.
     user_verification: glasslock.UserVerification,
-    /// User presence requirement. Defaults to required.
-    user_presence: glasslock.UserPresence,
     /// Whether to allow cross-origin requests. Defaults to `False`.
     allow_cross_origin: Bool,
     /// Credential IDs the user may authenticate with. Empty for discoverable flow.
@@ -215,7 +213,6 @@ pub fn default_options() -> Options {
   Options(
     timeout: duration.minutes(1),
     user_verification: glasslock.VerificationPreferred,
-    user_presence: glasslock.PresenceRequired,
     allow_cross_origin: False,
     allow_credentials: [],
     allowed_top_origins: [],
@@ -268,7 +265,6 @@ pub fn request(
         origins: set.from_list(origins),
         rp_id: relying_party_id,
         user_verification: options.user_verification,
-        user_presence: options.user_presence,
         allow_cross_origin: options.allow_cross_origin,
         allowed_top_origins: options.allowed_top_origins,
       ),
@@ -382,7 +378,6 @@ pub fn verify(
     internal.verify_user_policies(
       auth_data.user_present,
       auth_data.user_verified,
-      challenge.data.user_presence,
       challenge.data.user_verification,
     )
     |> result.map_error(internal_error_to_authentication_error),

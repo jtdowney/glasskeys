@@ -28,13 +28,6 @@ fn user_verification_generator() -> qcheck.Generator(glasslock.UserVerification)
   ])
 }
 
-fn user_presence_generator() -> qcheck.Generator(glasslock.UserPresence) {
-  qcheck.from_generators(qcheck.return(glasslock.PresenceRequired), [
-    qcheck.return(glasslock.PresencePreferred),
-    qcheck.return(glasslock.PresenceDiscouraged),
-  ])
-}
-
 fn credential_id_generator() -> qcheck.Generator(glasslock.CredentialId) {
   qcheck.byte_aligned_bit_array() |> qcheck.map(glasslock.CredentialId)
 }
@@ -1045,7 +1038,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
     qcheck.list_from(credential_id_generator()),
     qcheck.list_from(qcheck.non_empty_string()),
     qcheck.bool(),
-    qcheck.tuple2(user_verification_generator(), user_presence_generator()),
+    user_verification_generator(),
   ))
   let #(
     relying_party_id,
@@ -1053,7 +1046,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
     allow_credentials,
     allowed_top_origins,
     allow_cross_origin,
-    #(user_verification, user_presence),
+    user_verification,
   ) = inputs
 
   let assert Ok(#(_, challenge)) =
@@ -1066,7 +1059,6 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
         allow_cross_origin:,
         allowed_top_origins:,
         user_verification:,
-        user_presence:,
       ),
     )
 
@@ -1084,7 +1076,6 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
   assert decoded_data.bytes == challenge_data.bytes
   assert decoded_data.rp_id == challenge_data.rp_id
   assert decoded_data.user_verification == challenge_data.user_verification
-  assert decoded_data.user_presence == challenge_data.user_presence
   assert decoded_data.allow_cross_origin == challenge_data.allow_cross_origin
   assert decoded_data.allowed_top_origins == challenge_data.allowed_top_origins
   assert authentication.challenge_allowed_credentials(decoded)
@@ -1169,7 +1160,6 @@ pub fn decode_rejects_unknown_version_test() {
       #("rp_id", json.string("example.com")),
       #("origins", json.array(["https://example.com"], json.string)),
       #("user_verification", json.string("preferred")),
-      #("user_presence", json.string("required")),
       #("allow_cross_origin", json.bool(False)),
       #("allowed_top_origins", json.array([], json.string)),
       #("allow_credentials", json.array([], json.string)),
@@ -1190,7 +1180,6 @@ pub fn decode_rejects_missing_allow_credentials_test() {
       #("rp_id", json.string("example.com")),
       #("origins", json.array(["https://example.com"], json.string)),
       #("user_verification", json.string("preferred")),
-      #("user_presence", json.string("required")),
       #("allow_cross_origin", json.bool(False)),
       #("allowed_top_origins", json.array([], json.string)),
     ])
@@ -1208,7 +1197,6 @@ pub fn request_emits_compat_json_test() {
       options: authentication.Options(
         timeout: duration.seconds(45),
         user_verification: glasslock.VerificationPreferred,
-        user_presence: glasslock.PresenceRequired,
         allow_cross_origin: False,
         allow_credentials: [
           glasslock.CredentialId(<<30, 31, 32, 33>>),

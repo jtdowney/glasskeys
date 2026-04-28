@@ -93,8 +93,6 @@ pub type Options {
     resident_key: ResidentKey,
     /// User verification requirement. Defaults to preferred.
     user_verification: glasslock.UserVerification,
-    /// User presence requirement. Defaults to required.
-    user_presence: glasslock.UserPresence,
     /// Whether to allow cross-origin requests. Defaults to `False`.
     allow_cross_origin: Bool,
     /// Accepted signing algorithms, in preference order (the authenticator
@@ -234,7 +232,6 @@ pub fn default_options() -> Options {
     authenticator_attachment: option.None,
     resident_key: ResidentKeyPreferred,
     user_verification: glasslock.VerificationPreferred,
-    user_presence: glasslock.PresenceRequired,
     allow_cross_origin: False,
     algorithms: [Es256],
     exclude_credentials: [],
@@ -336,7 +333,6 @@ pub fn request(
         origins: set.from_list(origins),
         rp_id: relying_party.id,
         user_verification: options.user_verification,
-        user_presence: options.user_presence,
         allow_cross_origin: options.allow_cross_origin,
         allowed_top_origins: options.allowed_top_origins,
       ),
@@ -476,7 +472,6 @@ pub fn verify(
     internal.verify_user_policies(
       auth_data.user_present,
       auth_data.user_verified,
-      challenge.data.user_presence,
       challenge.data.user_verification,
     )
     |> result.map_error(internal_error_to_registration_error),

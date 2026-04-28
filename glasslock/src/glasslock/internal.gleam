@@ -43,7 +43,6 @@ pub type ChallengeData {
     origins: Set(String),
     rp_id: String,
     user_verification: glasslock.UserVerification,
-    user_presence: glasslock.UserPresence,
     allow_cross_origin: Bool,
     allowed_top_origins: List(String),
   )
@@ -471,25 +470,6 @@ fn user_verification_from_string(
   }
 }
 
-fn user_presence_to_string(presence: glasslock.UserPresence) -> String {
-  case presence {
-    glasslock.PresenceRequired -> "required"
-    glasslock.PresencePreferred -> "preferred"
-    glasslock.PresenceDiscouraged -> "discouraged"
-  }
-}
-
-fn user_presence_from_string(
-  value: String,
-) -> Result(glasslock.UserPresence, Error) {
-  case value {
-    "required" -> Ok(glasslock.PresenceRequired)
-    "preferred" -> Ok(glasslock.PresencePreferred)
-    "discouraged" -> Ok(glasslock.PresenceDiscouraged)
-    _ -> Error(ParseError("Invalid user_presence: " <> value))
-  }
-}
-
 pub fn check_challenge_version(version: Int) -> Result(Nil, Error) {
   case version {
     1 -> Ok(Nil)
@@ -522,7 +502,6 @@ pub fn encode_challenge_data_fields(
       "user_verification",
       json.string(user_verification_to_string(data.user_verification)),
     ),
-    #("user_presence", json.string(user_presence_to_string(data.user_presence))),
     #("allow_cross_origin", json.bool(data.allow_cross_origin)),
     #("allowed_top_origins", json.array(data.allowed_top_origins, json.string)),
   ]
@@ -533,7 +512,6 @@ pub fn challenge_data_decoder() -> decode.Decoder(Result(ChallengeData, Error)) 
   use rp_id <- decode.field("rp_id", decode.string)
   use origins <- decode.field("origins", decode.list(decode.string))
   use user_verification <- decode.field("user_verification", decode.string)
-  use user_presence <- decode.field("user_presence", decode.string)
   use allow_cross_origin <- decode.field("allow_cross_origin", decode.bool)
   use allowed_top_origins <- decode.field(
     "allowed_top_origins",
@@ -544,13 +522,11 @@ pub fn challenge_data_decoder() -> decode.Decoder(Result(ChallengeData, Error)) 
     use verification <- result.try(user_verification_from_string(
       user_verification,
     ))
-    use presence <- result.try(user_presence_from_string(user_presence))
     Ok(ChallengeData(
       bytes:,
       origins: set.from_list(origins),
       rp_id:,
       user_verification: verification,
-      user_presence: presence,
       allow_cross_origin:,
       allowed_top_origins:,
     ))
@@ -648,9 +624,10 @@ pub fn verify_rp_id(
 pub fn verify_user_policies(
   user_present: Bool,
   user_verified: Bool,
-  presence: glasslock.UserPresence,
   verification: glasslock.UserVerification,
 ) -> Result(Nil, Error) {
+  use <- bool.guard(when: !user_present, return: Error(UserPresenceFailed))
+
   let verification_ok = case verification {
     glasslock.VerificationRequired -> user_verified
     glasslock.VerificationPreferred -> True
@@ -660,13 +637,6 @@ pub fn verify_user_policies(
     when: !verification_ok,
     return: Error(UserVerificationFailed),
   )
-
-  let presence_ok = case presence {
-    glasslock.PresenceRequired -> user_present
-    glasslock.PresencePreferred -> True
-    glasslock.PresenceDiscouraged -> True
-  }
-  use <- bool.guard(when: !presence_ok, return: Error(UserPresenceFailed))
 
   Ok(Nil)
 }

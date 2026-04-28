@@ -102,7 +102,7 @@ Each user can register multiple passkeys. After registration, store per passkey:
 
 - ES256 (P-256 + SHA-256), Ed25519, and RS256 (RSA PKCS#1 v1.5 + SHA-256) signatures
 - "none" attestation format
-- User verification and user presence policies
+- User verification policies
 - Sign count verification for cloned authenticator detection
 - Cross-origin and top-origin verification for iframe embeds
 - Test utilities via `glasslock/testing` for building WebAuthn test data

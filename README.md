@@ -39,7 +39,7 @@ just example-svelte  # Run the Svelte/SimpleWebAuthn demo
 - ES256 (P-256 + SHA-256), Ed25519, and RS256 (RSA PKCS#1 v1.5 + SHA-256) signatures
 - "none" attestation format
 - Discoverable credentials (passkeys) and non-discoverable credentials
-- User verification and user presence policies
+- User verification policies
 - Sign count verification for cloned authenticator detection
 - Cross-origin and top-origin verification for iframe embeds
 
