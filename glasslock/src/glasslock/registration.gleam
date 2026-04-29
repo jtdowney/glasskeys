@@ -21,8 +21,8 @@
 ////
 //// // Verify the response
 //// case registration.verify(response_json:, challenge:) {
-////   Ok(credential) -> // Store credential
-////   Error(e) -> // Handle error
+////   Ok(credential) -> todo as "store credential"
+////   Error(e) -> todo as "handle error"
 //// }
 //// ```
 

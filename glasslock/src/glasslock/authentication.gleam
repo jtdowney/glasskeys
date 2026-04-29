@@ -23,8 +23,8 @@
 ////
 //// // Verify the response
 //// case authentication.verify(response_json:, challenge:, stored: stored_credential) {
-////   Ok(updated_credential) -> // Update stored sign_count
-////   Error(e) -> // Handle error
+////   Ok(updated_credential) -> todo as "update stored sign_count"
+////   Error(e) -> todo as "handle error"
 //// }
 //// ```
 ////
@@ -44,18 +44,16 @@
 //// // `authentication.encode_challenge` / `authentication.parse_challenge`
 //// // to span processes.
 //// case authentication.parse_response(response_json) {
-////   Ok(info) -> {
-////     // Look up stored credential by info.credential_id
+////   Ok(info) ->
 ////     case lookup_credential(info.credential_id) {
 ////       Ok(stored) ->
 ////         case authentication.verify(response_json:, challenge:, stored:) {
-////           Ok(updated) -> // Update stored sign_count
-////           Error(e) -> // Handle verification error
+////           Ok(updated) -> todo as "update stored sign_count"
+////           Error(e) -> todo as "handle verification error"
 ////         }
-////       Error(e) -> // Handle lookup error
+////       Error(e) -> todo as "handle lookup error"
 ////     }
-////   }
-////   Error(e) -> // Handle parse error
+////   Error(e) -> todo as "handle parse error"
 //// }
 //// ```
 

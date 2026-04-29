@@ -27,8 +27,8 @@
 //// // `registration.parse_challenge`.
 ////
 //// case registration.verify(response_json:, challenge:) {
-////   Ok(credential) -> // Store credential.id, credential.public_key, sign_count
-////   Error(e) -> // Handle error
+////   Ok(credential) -> todo as "store credential.id, credential.public_key, sign_count"
+////   Error(e) -> todo as "handle error"
 //// }
 //// ```
 ////
@@ -50,8 +50,8 @@
 //// // `authentication.parse_challenge`.
 ////
 //// case authentication.verify(response_json:, challenge:, stored: stored_credential) {
-////   Ok(updated_credential) -> // Update stored sign_count
-////   Error(e) -> // Handle error
+////   Ok(updated_credential) -> todo as "update stored sign_count"
+////   Error(e) -> todo as "handle error"
 //// }
 //// ```
 
