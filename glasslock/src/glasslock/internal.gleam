@@ -105,7 +105,8 @@ pub fn extract_attestation_fields(
       use fmt <- result.try(get_cbor_string(entries, "fmt"))
       Ok(#(auth_data, att_stmt, fmt))
     }
-    _ -> Error(ParseError("Attestation object must be a map"))
+    cbor.Int(_) | cbor.Bytes(_) | cbor.String(_) ->
+      Error(ParseError("Attestation object must be a map"))
   }
 }
 
@@ -117,7 +118,8 @@ pub fn parse_attestation_object(data: BitArray) -> Result(cbor.Cbor, Error) {
 pub fn verify_attestation(statement: cbor.Cbor) -> Result(Nil, String) {
   case statement {
     cbor.Map([]) -> Ok(Nil)
-    _ -> Error("none attestation with non-empty statement")
+    cbor.Map(_) | cbor.Int(_) | cbor.Bytes(_) | cbor.String(_) ->
+      Error("none attestation with non-empty statement")
   }
 }
 
@@ -136,7 +138,8 @@ fn get_cbor_bytes(
   use v <- result.try(find_string_entry(entries, key))
   case v {
     cbor.Bytes(bytes) -> Ok(bytes)
-    _ -> Error(ParseError("Field not bytes: " <> key))
+    cbor.Int(_) | cbor.String(_) | cbor.Map(_) ->
+      Error(ParseError("Field not bytes: " <> key))
   }
 }
 
@@ -147,7 +150,8 @@ fn get_cbor_string(
   use v <- result.try(find_string_entry(entries, key))
   case v {
     cbor.String(s) -> Ok(s)
-    _ -> Error(ParseError("Field not string: " <> key))
+    cbor.Int(_) | cbor.Bytes(_) | cbor.Map(_) ->
+      Error(ParseError("Field not string: " <> key))
   }
 }
 
