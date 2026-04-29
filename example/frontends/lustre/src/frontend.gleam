@@ -225,76 +225,146 @@ fn update_login(
       login_model(state, typed),
       effect.none(),
     )
-    _, model.UserClickedLogin -> {
-      case state {
-        model.LoginConditional(abort:) -> abort()
-        _ -> Nil
-      }
-      #(
-        login_model(model.LoginModalBeginning, username),
-        api.login_begin(username, model.BackendBeganModalLogin),
-      )
-    }
-    model.LoginCheckingAutofill, model.AutofillSupportChecked(True) -> #(
+    _, model.UserClickedLogin -> begin_modal_login(state, username)
+    model.LoginCheckingAutofill, model.LoginCheckingAutofillAction(autofill_msg)
+    -> update_login_checking_autofill(username, autofill_msg)
+    model.LoginSettingUpConditional,
+      model.LoginSettingUpConditionalAction(setup_msg)
+    -> update_login_setting_up_conditional(username, setup_msg)
+    model.LoginModalBeginning, model.LoginModalBeginningAction(begin_msg) ->
+      update_login_modal_beginning(username, begin_msg)
+    model.LoginModalAwaiting, model.LoginModalAwaitingAction(await_msg) ->
+      update_login_modal_awaiting(username, await_msg)
+    model.LoginConditional(..), model.LoginConditionalAction(conditional_msg) ->
+      update_login_conditional(username, conditional_msg)
+    model.LoginVerifying, model.LoginVerifyingAction(verify_msg) ->
+      update_login_verifying(username, verify_msg)
+    _, _ -> #(login_model(state, username), effect.none())
+  }
+}
+
+fn begin_modal_login(
+  state: model.LoginState,
+  username: String,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case state {
+    model.LoginConditional(abort:) -> abort()
+    _ -> Nil
+  }
+  #(
+    login_model(model.LoginModalBeginning, username),
+    api.login_begin(username, fn(result) {
+      model.LoginModalBeginningAction(model.BackendBeganModalLogin(result))
+    }),
+  )
+}
+
+fn update_login_checking_autofill(
+  username: String,
+  msg: model.LoginCheckingAutofillMsg,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case msg {
+    model.AutofillSupportChecked(True) -> #(
       login_model(model.LoginSettingUpConditional, username),
-      api.login_begin("", model.BackendBeganLogin),
+      api.login_begin("", fn(result) {
+        model.LoginSettingUpConditionalAction(model.BackendBeganLogin(result))
+      }),
     )
-    model.LoginCheckingAutofill, model.AutofillSupportChecked(False) -> #(
+    model.AutofillSupportChecked(False) -> #(
       login_model(model.LoginReady(status: ""), username),
       effect.none(),
     )
-    model.LoginSettingUpConditional, model.BackendBeganLogin(Ok(options)) ->
-      start_conditional(options, username)
-    model.LoginSettingUpConditional, model.BackendBeganLogin(Error(message)) -> #(
+  }
+}
+
+fn update_login_setting_up_conditional(
+  username: String,
+  msg: model.LoginSettingUpConditionalMsg,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case msg {
+    model.BackendBeganLogin(Ok(options)) -> start_conditional(options, username)
+    model.BackendBeganLogin(Error(message)) -> #(
       login_model(model.LoginReady(status: "Error: " <> message), username),
       effect.none(),
     )
-    model.LoginModalBeginning, model.BackendBeganModalLogin(Ok(options)) -> #(
+  }
+}
+
+fn update_login_modal_beginning(
+  username: String,
+  msg: model.LoginModalBeginningMsg,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case msg {
+    model.BackendBeganModalLogin(Ok(options)) -> #(
       login_model(model.LoginModalAwaiting, username),
       authentication_effect(options),
     )
-    model.LoginModalBeginning, model.BackendBeganModalLogin(Error(message)) -> #(
+    model.BackendBeganModalLogin(Error(message)) -> #(
       login_model(model.LoginReady(status: "Error: " <> message), username),
       effect.none(),
     )
-    model.LoginModalAwaiting, model.AuthenticatorFinishedLogin(Ok(response)) -> #(
+  }
+}
+
+fn update_login_modal_awaiting(
+  username: String,
+  msg: model.LoginModalAwaitingMsg,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case msg {
+    model.AuthenticatorFinishedLogin(Ok(response)) -> #(
       login_model(model.LoginVerifying, username),
-      api.login_complete(response, model.BackendFinishedLogin),
+      api.login_complete(response, fn(result) {
+        model.LoginVerifyingAction(model.BackendFinishedLogin(result))
+      }),
     )
-    model.LoginModalAwaiting, model.AuthenticatorFinishedLogin(Error(error)) -> #(
+    model.AuthenticatorFinishedLogin(Error(error)) -> #(
       login_model(
         model.LoginReady(status: "Error: " <> glasskey_error_to_string(error)),
         username,
       ),
       effect.none(),
     )
-    model.LoginConditional(..),
-      model.AuthenticatorFinishedConditionalLogin(Ok(response))
-    -> #(
+  }
+}
+
+fn update_login_conditional(
+  username: String,
+  msg: model.LoginConditionalMsg,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case msg {
+    model.AuthenticatorFinishedConditionalLogin(Ok(response)) -> #(
       login_model(model.LoginVerifying, username),
-      api.login_complete(response, model.BackendFinishedLogin),
+      api.login_complete(response, fn(result) {
+        model.LoginVerifyingAction(model.BackendFinishedLogin(result))
+      }),
     )
-    model.LoginConditional(..),
-      model.AuthenticatorFinishedConditionalLogin(Error(glasskey.Aborted))
-    -> #(login_model(model.LoginReady(status: ""), username), effect.none())
-    model.LoginConditional(..),
-      model.AuthenticatorFinishedConditionalLogin(Error(error))
-    -> #(
+    model.AuthenticatorFinishedConditionalLogin(Error(glasskey.Aborted)) -> #(
+      login_model(model.LoginReady(status: ""), username),
+      effect.none(),
+    )
+    model.AuthenticatorFinishedConditionalLogin(Error(error)) -> #(
       login_model(
         model.LoginReady(status: "Error: " <> glasskey_error_to_string(error)),
         username,
       ),
       effect.none(),
     )
-    model.LoginVerifying, model.BackendFinishedLogin(Ok(verified_username)) -> #(
+  }
+}
+
+fn update_login_verifying(
+  username: String,
+  msg: model.LoginVerifyingMsg,
+) -> #(model.Model, Effect(model.LoginMsg)) {
+  case msg {
+    model.BackendFinishedLogin(Ok(verified_username)) -> #(
       model.Authenticated(username: verified_username),
       modem.push(router.to_path(router.Welcome), option.None, option.None),
     )
-    model.LoginVerifying, model.BackendFinishedLogin(Error(message)) -> #(
+    model.BackendFinishedLogin(Error(message)) -> #(
       login_model(model.LoginReady(status: "Error: " <> message), username),
       effect.none(),
     )
-    _, _ -> #(login_model(state, username), effect.none())
   }
 }
 
@@ -324,7 +394,11 @@ fn await_conditional_authentication_effect(
   effect.from(fn(dispatch) {
     result
     |> promise.map(fn(r) {
-      dispatch(model.AuthenticatorFinishedConditionalLogin(r))
+      dispatch(
+        model.LoginConditionalAction(
+          model.AuthenticatorFinishedConditionalLogin(r),
+        ),
+      )
     })
     Nil
   })
@@ -334,7 +408,11 @@ fn check_autofill_support_effect() -> Effect(model.LoginMsg) {
   effect.from(fn(dispatch) {
     glasskey.supports_webauthn_autofill()
     |> promise.map(fn(supported) {
-      dispatch(model.AutofillSupportChecked(supported))
+      dispatch(
+        model.LoginCheckingAutofillAction(model.AutofillSupportChecked(
+          supported,
+        )),
+      )
     })
     Nil
   })
@@ -346,7 +424,9 @@ fn authentication_effect(
   effect.from(fn(dispatch) {
     glasskey.start_authentication(options)
     |> promise.map(fn(result) {
-      dispatch(model.AuthenticatorFinishedLogin(result))
+      dispatch(
+        model.LoginModalAwaitingAction(model.AuthenticatorFinishedLogin(result)),
+      )
     })
     Nil
   })

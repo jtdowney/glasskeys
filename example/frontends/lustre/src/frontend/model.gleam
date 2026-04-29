@@ -64,11 +64,35 @@ pub type RegisterVerifyingMsg {
 pub type LoginMsg {
   UserClickedLogin
   UserTypedLoginUsername(String)
+  LoginCheckingAutofillAction(LoginCheckingAutofillMsg)
+  LoginSettingUpConditionalAction(LoginSettingUpConditionalMsg)
+  LoginModalBeginningAction(LoginModalBeginningMsg)
+  LoginModalAwaitingAction(LoginModalAwaitingMsg)
+  LoginConditionalAction(LoginConditionalMsg)
+  LoginVerifyingAction(LoginVerifyingMsg)
+}
+
+pub type LoginCheckingAutofillMsg {
   AutofillSupportChecked(Bool)
+}
+
+pub type LoginSettingUpConditionalMsg {
   BackendBeganLogin(Result(glasskey.AuthenticationOptions, String))
+}
+
+pub type LoginModalBeginningMsg {
   BackendBeganModalLogin(Result(glasskey.AuthenticationOptions, String))
+}
+
+pub type LoginModalAwaitingMsg {
   AuthenticatorFinishedLogin(Result(String, glasskey.Error))
+}
+
+pub type LoginConditionalMsg {
   AuthenticatorFinishedConditionalLogin(Result(String, glasskey.Error))
+}
+
+pub type LoginVerifyingMsg {
   BackendFinishedLogin(Result(String, String))
 }
 
