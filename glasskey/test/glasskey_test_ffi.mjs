@@ -206,6 +206,10 @@ export function setGetDomException(name, message) {
   };
 }
 
+export function setGetPlainError(message) {
+  getBehavior = { kind: "throw", error: new Error(message) };
+}
+
 export function setConditionalMediationAvailable(available) {
   conditionalMediationAvailable = available;
 }

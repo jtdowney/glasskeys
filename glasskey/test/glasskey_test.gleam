@@ -1265,6 +1265,66 @@ pub fn start_authentication_classifies_security_error_test() {
   promise.resolve(Nil)
 }
 
+pub fn start_authentication_classifies_not_supported_error_test() {
+  use <- with_fake_navigator
+  helpers.set_get_dom_exception(name: "NotSupportedError", message: "boom")
+
+  use result <- promise.await(
+    glasskey.start_authentication(default_authentication_options()),
+  )
+
+  assert result == Error(glasskey.NotSupported)
+  promise.resolve(Nil)
+}
+
+pub fn start_authentication_classifies_not_allowed_error_test() {
+  use <- with_fake_navigator
+  helpers.set_get_dom_exception(name: "NotAllowedError", message: "boom")
+
+  use result <- promise.await(
+    glasskey.start_authentication(default_authentication_options()),
+  )
+
+  assert result == Error(glasskey.NotAllowed)
+  promise.resolve(Nil)
+}
+
+pub fn start_authentication_classifies_abort_error_test() {
+  use <- with_fake_navigator
+  helpers.set_get_dom_exception(name: "AbortError", message: "boom")
+
+  use result <- promise.await(
+    glasskey.start_authentication(default_authentication_options()),
+  )
+
+  assert result == Error(glasskey.Aborted)
+  promise.resolve(Nil)
+}
+
+pub fn start_authentication_unknown_dom_exception_includes_name_and_message_test() {
+  use <- with_fake_navigator
+  helpers.set_get_dom_exception(name: "WeirdError", message: "oops")
+
+  use result <- promise.await(
+    glasskey.start_authentication(default_authentication_options()),
+  )
+
+  assert result == Error(glasskey.UnknownError("WeirdError: oops"))
+  promise.resolve(Nil)
+}
+
+pub fn start_authentication_plain_error_becomes_unknown_error_test() {
+  use <- with_fake_navigator
+  helpers.set_get_plain_error("network down")
+
+  use result <- promise.await(
+    glasskey.start_authentication(default_authentication_options()),
+  )
+
+  assert result == Error(glasskey.UnknownError("network down"))
+  promise.resolve(Nil)
+}
+
 pub fn start_authentication_passes_options_to_navigator_test() {
   use <- with_fake_navigator
   helpers.set_get_credential(

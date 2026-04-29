@@ -66,6 +66,9 @@ pub fn set_get_null() -> Nil
 @external(javascript, "../glasskey_test_ffi.mjs", "setGetDomException")
 pub fn set_get_dom_exception(name name: String, message message: String) -> Nil
 
+@external(javascript, "../glasskey_test_ffi.mjs", "setGetPlainError")
+pub fn set_get_plain_error(message: String) -> Nil
+
 @external(javascript, "../glasskey_test_ffi.mjs", "lastCreateSnapshot")
 pub fn last_create_snapshot() -> Result(CreateSnapshot, Nil)
 
