@@ -76,8 +76,10 @@ pub type Options {
   Options(
     /// Timeout for the ceremony. Defaults to 1 minute.
     timeout: Duration,
-    /// User verification requirement. Defaults to preferred.
-    user_verification: glasslock.UserVerification,
+    /// User verification requirement. `None` omits the field from
+    /// the JSON sent to the browser; the browser applies the spec default
+    /// of `preferred`.
+    user_verification: Option(glasslock.UserVerification),
     /// Whether to allow cross-origin requests. Defaults to `False`.
     allow_cross_origin: Bool,
     /// Credential IDs the user may authenticate with. Empty for discoverable flow.
@@ -215,7 +217,7 @@ fn parse_allow_credentials(
 pub fn default_options() -> Options {
   Options(
     timeout: duration.minutes(1),
-    user_verification: glasslock.VerificationPreferred,
+    user_verification: option.None,
     allow_cross_origin: False,
     allow_credentials: [],
     allowed_top_origins: [],
@@ -248,13 +250,8 @@ pub fn request(
         #("challenge", json.string(challenge_b64)),
         #("rpId", json.string(relying_party_id)),
         #("timeout", json.int(duration.to_milliseconds(options.timeout))),
-        #(
-          "userVerification",
-          json.string(internal.user_verification_to_string(
-            options.user_verification,
-          )),
-        ),
       ]
+      |> maybe_add_user_verification(options.user_verification)
       |> internal.maybe_add_credential_descriptors(
         key: "allowCredentials",
         credentials: options.allow_credentials,
@@ -267,7 +264,10 @@ pub fn request(
         bytes: challenge_bytes,
         origins: set.from_list(origins),
         rp_id: relying_party_id,
-        user_verification: options.user_verification,
+        user_verification: option.unwrap(
+          options.user_verification,
+          glasslock.VerificationPreferred,
+        ),
         allow_cross_origin: options.allow_cross_origin,
         allowed_top_origins: options.allowed_top_origins,
       ),
@@ -275,6 +275,22 @@ pub fn request(
     )
 
   Ok(#(options_json, challenge))
+}
+
+fn maybe_add_user_verification(
+  fields: List(#(String, json.Json)),
+  user_verification: Option(glasslock.UserVerification),
+) -> List(#(String, json.Json)) {
+  case user_verification {
+    option.None -> fields
+    option.Some(value) -> [
+      #(
+        "userVerification",
+        json.string(internal.user_verification_to_string(value)),
+      ),
+      ..fields
+    ]
+  }
 }
 
 /// Parse response JSON to get credential_id/user_handle for lookup (discoverable flow).

@@ -68,10 +68,14 @@ pub type Options {
     timeout: Duration,
     /// Restrict authenticator type. `option.None` allows any.
     authenticator_attachment: Option(AuthenticatorAttachment),
-    /// Discoverable credential requirement. Defaults to preferred.
-    resident_key: ResidentKey,
-    /// User verification requirement. Defaults to preferred.
-    user_verification: glasslock.UserVerification,
+    /// Discoverable credential requirement. `option.None` omits the field
+    /// from the JSON sent to the browser; the browser then applies the spec
+    /// default of `discouraged`.
+    resident_key: Option(ResidentKey),
+    /// User verification requirement. `option.None` omits the field from
+    /// the JSON sent to the browser; the browser applies the spec default
+    /// of `preferred` and verify treats the policy as `preferred`.
+    user_verification: Option(glasslock.UserVerification),
     /// Whether to allow cross-origin requests. Defaults to `False`.
     allow_cross_origin: Bool,
     /// Accepted signing algorithms, in preference order (the authenticator
@@ -213,8 +217,8 @@ pub fn default_options() -> Options {
   Options(
     timeout: duration.minutes(1),
     authenticator_attachment: option.None,
-    resident_key: ResidentKeyPreferred,
-    user_verification: glasslock.VerificationPreferred,
+    resident_key: option.None,
+    user_verification: option.None,
     allow_cross_origin: False,
     algorithms: [Es256],
     exclude_credentials: [],
@@ -259,22 +263,11 @@ pub fn request(
       ])
     })
 
-  let authenticator_selection =
-    json.object(
-      [
-        #(
-          "residentKey",
-          json.string(resident_key_to_string(options.resident_key)),
-        ),
-        #(
-          "userVerification",
-          json.string(internal.user_verification_to_string(
-            options.user_verification,
-          )),
-        ),
-      ]
-      |> maybe_add_attachment(options.authenticator_attachment),
-    )
+  let authenticator_selection_fields =
+    []
+    |> maybe_add_attachment(options.authenticator_attachment)
+    |> maybe_add_user_verification(options.user_verification)
+    |> maybe_add_resident_key(options.resident_key)
 
   let options_json =
     json.object(
@@ -297,8 +290,8 @@ pub fn request(
         ),
         #("pubKeyCredParams", json.preprocessed_array(pub_key_params)),
         #("timeout", json.int(duration.to_milliseconds(options.timeout))),
-        #("authenticatorSelection", authenticator_selection),
       ]
+      |> maybe_add_authenticator_selection(authenticator_selection_fields)
       |> internal.maybe_add_credential_descriptors(
         key: "excludeCredentials",
         credentials: options.exclude_credentials,
@@ -311,7 +304,10 @@ pub fn request(
         bytes: challenge_bytes,
         origins: set.from_list(origins),
         rp_id: relying_party.id,
-        user_verification: options.user_verification,
+        user_verification: option.unwrap(
+          options.user_verification,
+          glasslock.VerificationPreferred,
+        ),
         allow_cross_origin: options.allow_cross_origin,
         allowed_top_origins: options.allowed_top_origins,
       ),
@@ -366,6 +362,45 @@ fn maybe_add_attachment(
       ),
       ..fields
     ]
+  }
+}
+
+fn maybe_add_resident_key(
+  fields: List(#(String, Json)),
+  resident_key: Option(ResidentKey),
+) -> List(#(String, Json)) {
+  case resident_key {
+    option.None -> fields
+    option.Some(value) -> [
+      #("residentKey", json.string(resident_key_to_string(value))),
+      ..fields
+    ]
+  }
+}
+
+fn maybe_add_user_verification(
+  fields: List(#(String, Json)),
+  user_verification: Option(glasslock.UserVerification),
+) -> List(#(String, Json)) {
+  case user_verification {
+    option.None -> fields
+    option.Some(value) -> [
+      #(
+        "userVerification",
+        json.string(internal.user_verification_to_string(value)),
+      ),
+      ..fields
+    ]
+  }
+}
+
+fn maybe_add_authenticator_selection(
+  fields: List(#(String, Json)),
+  selection_fields: List(#(String, Json)),
+) -> List(#(String, Json)) {
+  case selection_fields {
+    [] -> fields
+    _ -> [#("authenticatorSelection", json.object(selection_fields)), ..fields]
   }
 }
 

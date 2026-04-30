@@ -84,7 +84,7 @@ fn setup_authentication_with(
       options: authentication.Options(
         ..authentication.default_options(),
         allow_credentials:,
-        user_verification: config.user_verification,
+        user_verification: option.Some(config.user_verification),
         allow_cross_origin: config.allow_cross_origin,
         allowed_top_origins: config.allowed_top_origins,
       ),
@@ -191,7 +191,11 @@ pub fn request_emits_core_fields_test() {
   let decoder = {
     use relying_party_id <- decode.field("rpId", decode.string)
     use timeout <- decode.field("timeout", decode.int)
-    use uv <- decode.field("userVerification", decode.string)
+    use uv <- decode.optional_field(
+      "userVerification",
+      option.None,
+      decode.optional(decode.string),
+    )
     decode.success(#(relying_party_id, timeout, uv))
   }
 
@@ -199,7 +203,7 @@ pub fn request_emits_core_fields_test() {
     json.parse(json.to_string(options_json), decoder)
   assert relying_party_id == "example.com"
   assert timeout == 60_000
-  assert uv == "preferred"
+  assert uv == option.None
 
   assert testing.authentication_challenge_origins(challenge)
     == ["https://example.com"]
@@ -259,18 +263,26 @@ pub fn request_with_allow_credentials_test() {
 
 pub fn request_user_verification_variants_test() {
   let variants = [
-    #(glasslock.VerificationDiscouraged, "discouraged"),
-    #(glasslock.VerificationPreferred, "preferred"),
-    #(glasslock.VerificationRequired, "required"),
+    #(option.None, option.None),
+    #(
+      option.Some(glasslock.VerificationDiscouraged),
+      option.Some("discouraged"),
+    ),
+    #(option.Some(glasslock.VerificationPreferred), option.Some("preferred")),
+    #(option.Some(glasslock.VerificationRequired), option.Some("required")),
   ]
 
   let decoder = {
-    use uv <- decode.field("userVerification", decode.string)
+    use uv <- decode.optional_field(
+      "userVerification",
+      option.None,
+      decode.optional(decode.string),
+    )
     decode.success(uv)
   }
 
   list.each(variants, fn(pair) {
-    let #(variant, expected_string) = pair
+    let #(variant, expected) = pair
     let assert Ok(#(options_json, _)) =
       authentication.request(
         relying_party_id: "example.com",
@@ -281,7 +293,7 @@ pub fn request_user_verification_variants_test() {
         ),
       )
     let assert Ok(uv) = json.parse(json.to_string(options_json), decoder)
-    assert uv == expected_string
+    assert uv == expected
   })
 }
 
@@ -1128,7 +1140,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
         allow_credentials:,
         allow_cross_origin:,
         allowed_top_origins:,
-        user_verification:,
+        user_verification: option.Some(user_verification),
       ),
     )
 
@@ -1266,7 +1278,7 @@ pub fn request_emits_compat_json_test() {
       origins: ["https://example.com"],
       options: authentication.Options(
         timeout: duration.seconds(45),
-        user_verification: glasslock.VerificationPreferred,
+        user_verification: option.None,
         allow_cross_origin: False,
         allow_credentials: [
           glasslock.CredentialId(<<30, 31, 32, 33>>),

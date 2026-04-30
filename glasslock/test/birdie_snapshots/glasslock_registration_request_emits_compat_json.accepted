@@ -4,4 +4,4 @@ title: glasslock registration.request emits compat JSON
 file: ./test/glasslock/registration_test.gleam
 test_name: request_emits_compat_json_test
 ---
-{"excludeCredentials":[{"id":"CgsM","type":"public-key"},{"id":"FBUWFw","type":"public-key"}],"challenge":"REDACTED_CHALLENGE_BASE64URL","rp":{"id":"example.com","name":"Compat Test"},"user":{"id":"AQIDBAUGBwg","name":"alice","displayName":"Alice Example"},"pubKeyCredParams":[{"type":"public-key","alg":-7},{"type":"public-key","alg":-8},{"type":"public-key","alg":-257}],"timeout":90000,"authenticatorSelection":{"authenticatorAttachment":"cross-platform","residentKey":"required","userVerification":"required"}}
+{"excludeCredentials":[{"id":"CgsM","type":"public-key"},{"id":"FBUWFw","type":"public-key"}],"authenticatorSelection":{"residentKey":"required","userVerification":"required","authenticatorAttachment":"cross-platform"},"challenge":"REDACTED_CHALLENGE_BASE64URL","rp":{"id":"example.com","name":"Compat Test"},"user":{"id":"AQIDBAUGBwg","name":"alice","displayName":"Alice Example"},"pubKeyCredParams":[{"type":"public-key","alg":-7},{"type":"public-key","alg":-8},{"type":"public-key","alg":-257}],"timeout":90000}

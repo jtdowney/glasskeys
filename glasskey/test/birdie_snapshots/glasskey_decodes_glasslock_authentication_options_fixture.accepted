@@ -4,4 +4,4 @@ title: glasskey decodes glasslock authentication options fixture
 file: ./test/glasskey_test.gleam
 test_name: decodes_glasslock_authentication_options_test
 ---
-AuthenticationOptions(challenge: <<116, 101, 115, 116, 45, 99, 104, 97, 108, 108, 101, 110, 103, 101>>, rp_id: Some("example.com"), timeout: Some(45000), user_verification: Preferred, allow_credentials: [<<30, 31, 32, 33>>, <<40, 41, 42>>])
+AuthenticationOptions(challenge: <<116, 101, 115, 116, 45, 99, 104, 97, 108, 108, 101, 110, 103, 101>>, rp_id: Some("example.com"), timeout: Some(45000), user_verification: None, allow_credentials: [<<30, 31, 32, 33>>, <<40, 41, 42>>])

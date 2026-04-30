@@ -83,8 +83,11 @@ export async function createCredential(opts) {
 function buildPublicKeyForGet(opts) {
   const publicKey = {
     challenge: opts.challenge.rawBuffer,
-    userVerification: opts.user_verification,
   };
+
+  if (Option$isSome(opts.user_verification)) {
+    publicKey.userVerification = Option$Some$0(opts.user_verification);
+  }
 
   if (Option$isSome(opts.rp_id)) {
     publicKey.rpId = Option$Some$0(opts.rp_id);

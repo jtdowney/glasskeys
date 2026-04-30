@@ -65,7 +65,6 @@ pub fn authentication_options_json() -> String {
     #("challenge", json.string("dGVzdC1jaGFsbGVuZ2U")),
     #("rpId", json.string("example.com")),
     #("timeout", json.int(45_000)),
-    #("userVerification", json.string("preferred")),
   ])
   |> json.to_string
 }

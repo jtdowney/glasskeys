@@ -71,7 +71,7 @@ pub type AuthenticationOptions {
     challenge: BitArray,
     rp_id: Option(String),
     timeout: Option(Int),
-    user_verification: Requirement,
+    user_verification: Option(Requirement),
     allow_credentials: List(BitArray),
   )
 }
@@ -178,7 +178,7 @@ type GetOptions {
     challenge: BitArray,
     rp_id: Option(String),
     timeout: Option(Int),
-    user_verification: String,
+    user_verification: Option(String),
     allow_credentials: array.Array(CredentialDescriptor),
   )
 }
@@ -258,7 +258,10 @@ fn to_get_options(options: AuthenticationOptions) -> GetOptions {
     challenge: options.challenge,
     rp_id: options.rp_id,
     timeout: options.timeout,
-    user_verification: requirement_to_string(options.user_verification),
+    user_verification: option.map(
+      options.user_verification,
+      requirement_to_string,
+    ),
     allow_credentials: to_credential_descriptors(options.allow_credentials),
   )
 }
@@ -343,8 +346,8 @@ pub fn authentication_options_decoder() -> decode.Decoder(AuthenticationOptions)
   )
   use user_verification <- decode.optional_field(
     "userVerification",
-    Preferred,
-    requirement_decoder(),
+    option.None,
+    decode.map(requirement_decoder(), option.Some),
   )
   use allow_credentials <- decode.optional_field(
     "allowCredentials",

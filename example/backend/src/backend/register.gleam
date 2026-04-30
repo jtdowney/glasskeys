@@ -5,6 +5,7 @@ import gleam/bit_array
 import gleam/crypto
 import gleam/dynamic/decode
 import gleam/json
+import gleam/option
 import gleam/result
 import gleam/string
 import wisp
@@ -77,7 +78,7 @@ fn begin_registration(
           origins: ctx.origins,
           options: registration.Options(
             ..registration.default_options(),
-            resident_key: registration.ResidentKeyRequired,
+            resident_key: option.Some(registration.ResidentKeyRequired),
           ),
         )
 

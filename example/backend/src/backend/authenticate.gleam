@@ -7,6 +7,7 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/string
 import wisp
 
 const session_cookie = "authentication"
@@ -22,38 +23,54 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   let username = case json.parse(body, decoder) {
-    Ok(value) -> value
+    Ok(value) -> string.trim(value)
     Error(_) -> ""
   }
 
-  let allow_credentials = case username {
-    "" -> []
+  case allow_credentials_for_username(ctx, username) {
+    Error(message) ->
+      json.object([#("error", json.string(message))])
+      |> json.to_string
+      |> wisp.json_response(404)
+    Ok(allow_credentials) -> {
+      let assert Ok(#(options_json, challenge)) =
+        authentication.request(
+          relying_party_id: ctx.rp_id,
+          origins: ctx.origins,
+          options: authentication.Options(
+            ..authentication.default_options(),
+            allow_credentials:,
+          ),
+        )
+
+      let encoded = authentication.encode_challenge(challenge)
+
+      json.object([#("options", options_json)])
+      |> json.to_string
+      |> wisp.json_response(200)
+      |> wisp.set_cookie(
+        req,
+        session_cookie,
+        encoded,
+        wisp.Signed,
+        session_max_age,
+      )
+    }
+  }
+}
+
+fn allow_credentials_for_username(
+  ctx: web.Context,
+  username: String,
+) -> Result(List(glasslock.CredentialId), String) {
+  case username {
+    "" -> Ok([])
     name ->
       case credentials.get_user(ctx.credentials, name) {
-        Ok(user) -> list.map(user.credentials, fn(cred) { cred.id })
-        Error(_) -> []
+        Ok(user) -> Ok(list.map(user.credentials, fn(cred) { cred.id }))
+        Error(_) -> Error("user not found")
       }
   }
-
-  let options =
-    authentication.Options(
-      ..authentication.default_options(),
-      allow_credentials:,
-    )
-
-  let assert Ok(#(options_json, challenge)) =
-    authentication.request(
-      relying_party_id: ctx.rp_id,
-      origins: ctx.origins,
-      options:,
-    )
-
-  let encoded = authentication.encode_challenge(challenge)
-
-  json.object([#("options", options_json)])
-  |> json.to_string
-  |> wisp.json_response(200)
-  |> wisp.set_cookie(req, session_cookie, encoded, wisp.Signed, session_max_age)
 }
 
 pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {

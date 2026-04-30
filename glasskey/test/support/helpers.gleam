@@ -18,7 +18,7 @@ pub type GetSnapshot {
   GetSnapshot(
     rp_id: Option(String),
     timeout: Option(Int),
-    user_verification: String,
+    user_verification: Option(String),
     allow_credential_count: Int,
   )
 }

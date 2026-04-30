@@ -34,7 +34,10 @@ fn user_verification_generator() -> qcheck.Generator(glasslock.UserVerification)
 }
 
 fn setup_options(uv: glasslock.UserVerification) -> registration.Options {
-  registration.Options(..registration.default_options(), user_verification: uv)
+  registration.Options(
+    ..registration.default_options(),
+    user_verification: option.Some(uv),
+  )
 }
 
 fn make_request(
@@ -199,21 +202,29 @@ pub fn request_with_cross_platform_attachment_test() {
 
 pub fn request_resident_key_variants_test() {
   let variants = [
-    #(registration.ResidentKeyDiscouraged, "discouraged"),
-    #(registration.ResidentKeyPreferred, "preferred"),
-    #(registration.ResidentKeyRequired, "required"),
+    #(option.None, option.None),
+    #(
+      option.Some(registration.ResidentKeyDiscouraged),
+      option.Some("discouraged"),
+    ),
+    #(option.Some(registration.ResidentKeyPreferred), option.Some("preferred")),
+    #(option.Some(registration.ResidentKeyRequired), option.Some("required")),
   ]
 
   let decoder = {
-    use rk <- decode.subfield(
-      ["authenticatorSelection", "residentKey"],
-      decode.string,
-    )
+    use rk <- decode.optional_field("authenticatorSelection", option.None, {
+      use inner <- decode.optional_field(
+        "residentKey",
+        option.None,
+        decode.optional(decode.string),
+      )
+      decode.success(inner)
+    })
     decode.success(rk)
   }
 
   list.each(variants, fn(pair) {
-    let #(variant, expected_string) = pair
+    let #(variant, expected) = pair
     let #(options_json, _) =
       make_request(
         registration.Options(
@@ -222,7 +233,7 @@ pub fn request_resident_key_variants_test() {
         ),
       )
     let assert Ok(rk) = json.parse(json.to_string(options_json), decoder)
-    assert rk == expected_string
+    assert rk == expected
   })
 }
 
@@ -713,7 +724,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
       algorithms:,
       allow_cross_origin:,
       allowed_top_origins:,
-      user_verification:,
+      user_verification: option.Some(user_verification),
     )
   let assert Ok(#(_, challenge)) =
     registration.request(
@@ -845,8 +856,8 @@ pub fn request_emits_compat_json_test() {
       options: registration.Options(
         timeout: duration.seconds(90),
         authenticator_attachment: option.Some(registration.CrossPlatform),
-        resident_key: registration.ResidentKeyRequired,
-        user_verification: glasslock.VerificationRequired,
+        resident_key: option.Some(registration.ResidentKeyRequired),
+        user_verification: option.Some(glasslock.VerificationRequired),
         allow_cross_origin: False,
         algorithms: [
           registration.Es256,

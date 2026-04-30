@@ -73,16 +73,22 @@ fn default_authentication_options() -> glasskey.AuthenticationOptions {
     challenge: <<9, 10, 11>>,
     rp_id: option.Some("example.com"),
     timeout: option.None,
-    user_verification: glasskey.Required,
+    user_verification: option.Some(glasskey.Required),
     allow_credentials: [],
   )
 }
 
 fn with_fake_navigator(body: fn() -> Promise(Nil)) -> Promise(Nil) {
   helpers.install_default_fake_navigator()
-  use _ <- promise.await(body())
-  helpers.uninstall_fake_navigator()
-  promise.resolve(Nil)
+  body()
+  |> promise.map(fn(_) {
+    helpers.uninstall_fake_navigator()
+    Nil
+  })
+  |> promise.rescue(fn(_) {
+    helpers.uninstall_fake_navigator()
+    panic as "fake navigator body failed"
+  })
 }
 
 fn build_registration_options(fixture: RegistrationFixture) -> Dynamic {
@@ -610,7 +616,7 @@ pub fn decode_authentication_options_test() {
   assert opt.challenge == <<"test-challenge":utf8>>
   assert opt.rp_id == option.Some("example.com")
   assert opt.timeout == option.Some(60_000)
-  assert opt.user_verification == glasskey.Preferred
+  assert opt.user_verification == option.Some(glasskey.Preferred)
   assert opt.allow_credentials == []
 }
 
@@ -636,7 +642,7 @@ pub fn decode_authentication_options_with_allow_credentials_test() {
     decode.run(dyn, glasskey.authentication_options_decoder())
 
   assert opt.allow_credentials == [<<1, 2, 3>>]
-  assert opt.user_verification == glasskey.Required
+  assert opt.user_verification == option.Some(glasskey.Required)
 }
 
 pub fn decode_authentication_options_minimal_test() {
@@ -651,7 +657,7 @@ pub fn decode_authentication_options_minimal_test() {
   assert opt.challenge == <<"test":utf8>>
   assert opt.rp_id == option.None
   assert opt.timeout == option.None
-  assert opt.user_verification == glasskey.Preferred
+  assert opt.user_verification == option.None
   assert opt.allow_credentials == []
 }
 
@@ -1143,7 +1149,7 @@ pub fn start_registration_omits_authenticator_selection_when_all_none_test() {
   promise.resolve(Nil)
 }
 
-pub fn start_registration_omits_inner_authenticator_selection_fields_when_none_test() {
+pub fn start_registration_emits_explicit_authenticator_selection_test() {
   use <- with_fake_navigator
   helpers.set_create_credential(
     raw_id: <<>>,
@@ -1155,7 +1161,7 @@ pub fn start_registration_omits_inner_authenticator_selection_fields_when_none_t
     glasskey.RegistrationOptions(
       ..default_registration_options(),
       resident_key: option.Some(glasskey.Required),
-      user_verification: option.None,
+      user_verification: option.Some(glasskey.Required),
       authenticator_attachment: option.None,
     )
 
@@ -1164,7 +1170,7 @@ pub fn start_registration_omits_inner_authenticator_selection_fields_when_none_t
 
   assert snapshot.has_authenticator_selection
   assert snapshot.resident_key == option.Some("required")
-  assert snapshot.user_verification == option.None
+  assert snapshot.user_verification == option.Some("required")
   assert snapshot.authenticator_attachment == option.None
 
   promise.resolve(Nil)
@@ -1347,8 +1353,32 @@ pub fn start_authentication_passes_options_to_navigator_test() {
 
   assert snapshot.rp_id == option.Some("example.com")
   assert snapshot.timeout == option.Some(45_000)
-  assert snapshot.user_verification == "required"
+  assert snapshot.user_verification == option.Some("required")
   assert snapshot.allow_credential_count == 3
+
+  promise.resolve(Nil)
+}
+
+pub fn start_authentication_omits_user_verification_when_none_test() {
+  use <- with_fake_navigator
+  helpers.set_get_credential(
+    raw_id: <<>>,
+    client_data_json: <<>>,
+    authenticator_data: <<>>,
+    signature: <<>>,
+    user_handle: option.None,
+  )
+
+  let opts =
+    glasskey.AuthenticationOptions(
+      ..default_authentication_options(),
+      user_verification: option.None,
+    )
+
+  use _ <- promise.await(glasskey.start_authentication(opts))
+  let assert Ok(snapshot) = helpers.last_get_snapshot()
+
+  assert snapshot.user_verification == option.None
 
   promise.resolve(Nil)
 }
