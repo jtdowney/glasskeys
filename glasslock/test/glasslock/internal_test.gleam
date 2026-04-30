@@ -409,6 +409,32 @@ pub fn parse_registration_auth_data_rejects_truncated_credential_test() {
     == Error(internal.ParseError("Missing attested credential data"))
 }
 
+pub fn split_cose_key_rejects_trailing_garbage_test() {
+  let keypair = testing.generate_es256_keypair()
+  let cose_key = testing.cose_key(keypair)
+  let credential_id = <<1, 2, 3, 4>>
+  let cred_id_len = bit_array.byte_size(credential_id)
+
+  let assert Ok(rp_id_hash) =
+    crypto.hash(hash.Sha256, bit_array.from_string("example.com"))
+  let flags_byte = 0x41
+  let aaguid = <<0:128>>
+  let auth_data =
+    bit_array.concat([
+      rp_id_hash,
+      <<flags_byte>>,
+      <<0x00, 0x00, 0x00, 0x00>>,
+      aaguid,
+      <<cred_id_len:size(16)>>,
+      credential_id,
+      cose_key,
+      <<0xDE, 0xAD>>,
+    ])
+
+  assert internal.parse_registration_auth_data(auth_data)
+    == Error(internal.ParseError("Trailing bytes after COSE public key"))
+}
+
 pub fn verify_attestation_rejects_non_empty_statement_test() {
   let non_empty = cbor.Map([#(cbor.String("alg"), cbor.Int(-7))])
   assert internal.verify_attestation(non_empty)

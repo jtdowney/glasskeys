@@ -257,14 +257,16 @@ fn split_cose_key(
   data: BitArray,
   has_extensions: Bool,
 ) -> Result(BitArray, Error) {
-  case has_extensions {
-    False -> Ok(data)
-    True -> {
-      use #(_, remaining) <- result.try(
-        cbor.decode(data)
-        |> result.map_error(ParseError),
-      )
-      let key_len = bit_array.byte_size(data) - bit_array.byte_size(remaining)
+  use #(_, remaining) <- result.try(
+    cbor.decode(data)
+    |> result.map_error(ParseError),
+  )
+  let remaining_size = bit_array.byte_size(remaining)
+  case has_extensions, remaining_size {
+    False, 0 -> Ok(data)
+    False, _ -> Error(ParseError("Trailing bytes after COSE public key"))
+    True, _ -> {
+      let key_len = bit_array.byte_size(data) - remaining_size
       bit_array.slice(data, at: 0, take: key_len)
       |> result.replace_error(ParseError("Invalid attested credential data"))
     }
