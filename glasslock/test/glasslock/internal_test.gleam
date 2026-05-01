@@ -435,12 +435,6 @@ pub fn split_cose_key_rejects_trailing_garbage_test() {
     == Error(internal.ParseError("Trailing bytes after COSE public key"))
 }
 
-pub fn verify_attestation_rejects_non_empty_statement_test() {
-  let non_empty = cbor.Map([#(cbor.String("alg"), cbor.Int(-7))])
-  assert internal.verify_attestation(non_empty)
-    == Error("none attestation with non-empty statement")
-}
-
 pub fn extract_attestation_fields_rejects_non_map_test() {
   assert internal.extract_attestation_fields(cbor.String("not a map"))
     == Error(internal.ParseError("Attestation object must be a map"))

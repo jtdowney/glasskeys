@@ -115,14 +115,6 @@ pub fn parse_attestation_object(data: BitArray) -> Result(cbor.Cbor, Error) {
   |> result.map_error(ParseError)
 }
 
-pub fn verify_attestation(statement: cbor.Cbor) -> Result(Nil, String) {
-  case statement {
-    cbor.Map([]) -> Ok(Nil)
-    cbor.Map(_) | cbor.Int(_) | cbor.Bytes(_) | cbor.String(_) ->
-      Error("none attestation with non-empty statement")
-  }
-}
-
 fn find_string_entry(
   entries: List(#(cbor.Cbor, cbor.Cbor)),
   key: String,
@@ -450,7 +442,8 @@ fn rsa_pss_hash(alg: gose.RsaPssAlg) -> hash.HashAlgorithm {
 fn map_gose_error(err: gose.GoseError) -> Error {
   case err {
     gose.ParseError(msg) -> ParseError(msg)
-    gose.CryptoError(_) | gose.VerificationFailed -> SignatureVerificationFailed
+    gose.CryptoError(msg) -> UnsupportedKey(msg)
+    gose.VerificationFailed -> SignatureVerificationFailed
     gose.InvalidState(msg) -> UnsupportedKey(msg)
   }
 }
@@ -548,9 +541,10 @@ pub fn parse_challenge_shared(
     use version <- decode.field("v", decode.int)
     use kind <- decode.field("kind", decode.string)
     use data_result <- decode.then(challenge_data_decoder())
-    decode.success(#(version, kind, data_result))
+    use raw <- decode.then(decode.dynamic)
+    decode.success(#(version, kind, data_result, raw))
   }
-  use #(version, kind, data_result) <- result.try(
+  use #(version, kind, data_result, raw) <- result.try(
     json.parse(encoded, envelope_decoder)
     |> result.replace_error(ParseError("Invalid challenge encoding")),
   )
@@ -558,7 +552,7 @@ pub fn parse_challenge_shared(
   use _ <- result.try(check_challenge_kind(kind, expected_kind))
   use data <- result.try(data_result)
   use tail <- result.try(
-    json.parse(encoded, rest_decoder)
+    decode.run(raw, rest_decoder)
     |> result.replace_error(ParseError("Invalid challenge encoding")),
   )
   Ok(#(data, tail))

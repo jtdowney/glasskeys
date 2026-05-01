@@ -28,6 +28,7 @@
 
 import glasslock
 import glasslock/internal
+import glasslock/internal/cbor
 import gleam/bit_array
 import gleam/bool
 import gleam/dynamic/decode
@@ -205,12 +206,11 @@ pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
   }
 
   use #(data, cose_algs) <- result.try(
-    internal.parse_challenge_shared(
+    wrap_error(internal.parse_challenge_shared(
       encoded,
       expected_kind: "registration",
       rest_decoder: decoder,
-    )
-    |> result.map_error(internal_error_to_registration_error),
+    )),
   )
   use algorithms <- result.try(list.try_map(cose_algs, algorithm_from_cose))
   Ok(Challenge(data:, algorithms:))
@@ -427,12 +427,10 @@ pub fn verify(
   use response <- result.try(parse_response_json(response_json))
 
   use raw_id <- result.try(
-    internal.decode_base64url(response.raw_id, "rawId")
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
   )
   use credential_id_bytes <- result.try(
-    internal.decode_base64url(response.credential_id, "id")
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.decode_base64url(response.credential_id, "id")),
   )
   use <- bool.guard(
     when: credential_id_bytes != raw_id,
@@ -440,12 +438,16 @@ pub fn verify(
   )
 
   use client_data_json <- result.try(
-    internal.decode_base64url(response.client_data_json, "clientDataJSON")
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.decode_base64url(
+      response.client_data_json,
+      "clientDataJSON",
+    )),
   )
   use attestation_object <- result.try(
-    internal.decode_base64url(response.attestation_object, "attestationObject")
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.decode_base64url(
+      response.attestation_object,
+      "attestationObject",
+    )),
   )
 
   use <- bool.guard(
@@ -454,49 +456,31 @@ pub fn verify(
   )
 
   use client_data <- result.try(
-    internal.parse_client_data(client_data_json)
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.parse_client_data(client_data_json)),
   )
   use _ <- result.try(
-    internal.verify_client_data(
+    wrap_error(internal.verify_client_data(
       client_data,
       expected_type: "webauthn.create",
       expected_challenge: challenge.data.bytes,
       expected_origins: challenge.data.origins,
       allow_cross_origin: challenge.data.allow_cross_origin,
       allowed_top_origins: challenge.data.allowed_top_origins,
-    )
-    |> result.map_error(internal_error_to_registration_error),
+    )),
   )
 
   use attestation_obj <- result.try(
-    internal.parse_attestation_object(attestation_object)
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.parse_attestation_object(attestation_object)),
   )
   use #(auth_data_bytes, att_stmt, fmt_string) <- result.try(
-    internal.extract_attestation_fields(attestation_obj)
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.extract_attestation_fields(attestation_obj)),
   )
   use <- bool.guard(
     when: fmt_string != "none",
     return: Error(InvalidAttestation("unsupported format: " <> fmt_string)),
   )
   use auth_data <- result.try(
-    internal.parse_registration_auth_data(auth_data_bytes)
-    |> result.map_error(internal_error_to_registration_error),
-  )
-
-  use _ <- result.try(
-    internal.verify_rp_id(auth_data.rp_id_hash, challenge.data.rp_id)
-    |> result.map_error(internal_error_to_registration_error),
-  )
-  use _ <- result.try(
-    internal.verify_user_policies(
-      auth_data.user_present,
-      auth_data.user_verified,
-      challenge.data.user_verification,
-    )
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.parse_registration_auth_data(auth_data_bytes)),
   )
 
   let attested = auth_data.attested_credential
@@ -506,9 +490,19 @@ pub fn verify(
     return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
 
+  use _ <- result.try(
+    wrap_error(internal.verify_rp_id(auth_data.rp_id_hash, challenge.data.rp_id)),
+  )
+  use _ <- result.try(
+    wrap_error(internal.verify_user_policies(
+      auth_data.user_present,
+      auth_data.user_verified,
+      challenge.data.user_verification,
+    )),
+  )
+
   use #(_, alg) <- result.try(
-    internal.parse_public_key(attested.public_key_cbor)
-    |> result.map_error(internal_error_to_registration_error),
+    wrap_error(internal.parse_public_key(attested.public_key_cbor)),
   )
   use <- bool.guard(
     when: !list.any(challenge.algorithms, fn(a) {
@@ -519,9 +513,14 @@ pub fn verify(
     )),
   )
 
-  internal.verify_attestation(att_stmt)
-  |> result.map_error(InvalidAttestation)
-  |> result.replace(glasslock.Credential(
+  use <- bool.guard(
+    when: att_stmt != cbor.Map([]),
+    return: Error(InvalidAttestation(
+      "none attestation with non-empty statement",
+    )),
+  )
+
+  Ok(glasslock.Credential(
     id: glasslock.CredentialId(attested.credential_id),
     public_key: glasslock.PublicKey(attested.public_key_cbor),
     sign_count: auth_data.sign_count,
@@ -564,13 +563,15 @@ fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
   |> result.replace_error(ParseError("Invalid registration response JSON"))
 }
 
-fn internal_error_to_registration_error(error: internal.Error) -> Error {
-  case error {
-    internal.VerificationMismatch(field) -> VerificationMismatch(field)
-    internal.UnsupportedKey(reason) -> UnsupportedKey(reason)
-    internal.ParseError(message) -> ParseError(message)
-    internal.UserPresenceFailed -> UserPresenceFailed
-    internal.UserVerificationFailed -> UserVerificationFailed
-    internal.SignatureVerificationFailed -> InvalidSignature
-  }
+fn wrap_error(result: Result(a, internal.Error)) -> Result(a, Error) {
+  result.map_error(result, fn(error) {
+    case error {
+      internal.VerificationMismatch(field) -> VerificationMismatch(field)
+      internal.UnsupportedKey(reason) -> UnsupportedKey(reason)
+      internal.ParseError(message) -> ParseError(message)
+      internal.UserPresenceFailed -> UserPresenceFailed
+      internal.UserVerificationFailed -> UserVerificationFailed
+      internal.SignatureVerificationFailed -> InvalidSignature
+    }
+  })
 }

@@ -783,6 +783,42 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
     == Error(registration.VerificationMismatch(glasslock.CredentialIdField))
 }
 
+pub fn verify_rejects_non_empty_attestation_statement_test() {
+  let challenge = setup_challenge()
+  let keypair = testing.generate_es256_keypair()
+  let credential_id = glasslock.CredentialId(<<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>)
+  let auth_data =
+    testing.build_registration_authenticator_data(
+      relying_party_id: testing.registration_challenge_rp_id(challenge),
+      credential_id:,
+      cose_key: testing.cose_key(keypair),
+      flags: testing.default_flags(),
+      sign_count: 0,
+    )
+  let client_data_json =
+    testing.build_client_data_create(
+      challenge: testing.registration_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: False,
+    )
+  let response_json =
+    testing.to_registration_json_with(
+      credential_id:,
+      client_data_json:,
+      attestation_object: testing.build_attestation_object_with_non_empty_attstmt(
+        auth_data:,
+      ),
+      credential_type: "public-key",
+      transports: [],
+    )
+
+  let result = registration.verify(response_json:, challenge:)
+  assert result
+    == Error(registration.InvalidAttestation(
+      "none attestation with non-empty statement",
+    ))
+}
+
 pub fn verify_rejects_unsupported_attestation_format_test() {
   let challenge = setup_challenge()
   let keypair = testing.generate_es256_keypair()

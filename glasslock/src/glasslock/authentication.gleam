@@ -222,12 +222,11 @@ pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
   }
 
   use #(data, entries) <- result.try(
-    internal.parse_challenge_shared(
+    wrap_error(internal.parse_challenge_shared(
       encoded,
       expected_kind: "authentication",
       rest_decoder: decoder,
-    )
-    |> result.map_error(internal_error_to_authentication_error),
+    )),
   )
   use allowed_credentials <- result.try(parse_allow_credentials(entries))
   Ok(Challenge(data:, allowed_credentials:))
@@ -239,8 +238,7 @@ fn parse_allow_credentials(
   list.try_map(entries, fn(entry) {
     let #(id_b64, transport_strings) = entry
     use raw <- result.try(
-      internal.decode_base64url(id_b64, "allow_credentials")
-      |> result.map_error(internal_error_to_authentication_error),
+      wrap_error(internal.decode_base64url(id_b64, "allow_credentials")),
     )
     Ok(glasslock.CredentialDescriptor(
       id: glasslock.CredentialId(raw),
@@ -340,12 +338,10 @@ fn maybe_add_user_verification(
 pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
   use response <- result.try(parse_response_json(response_json))
   use raw_id <- result.try(
-    internal.decode_base64url(response.raw_id, "rawId")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
   )
   use credential_id_bytes <- result.try(
-    internal.decode_base64url(response.credential_id, "id")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(response.credential_id, "id")),
   )
   use <- bool.guard(
     when: credential_id_bytes != raw_id,
@@ -354,7 +350,7 @@ pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
 
   internal.decode_optional_base64url(response.user_handle, "userHandle")
   |> result.map(ResponseInfo(glasslock.CredentialId(raw_id), _))
-  |> result.map_error(internal_error_to_authentication_error)
+  |> wrap_error
 }
 
 /// Verify a challenge response from the browser.
@@ -373,28 +369,29 @@ pub fn verify(
   use response <- result.try(parse_response_json(response_json))
 
   use raw_id <- result.try(
-    internal.decode_base64url(response.raw_id, "rawId")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
   )
   use credential_id_bytes <- result.try(
-    internal.decode_base64url(response.credential_id, "id")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(response.credential_id, "id")),
   )
   use <- bool.guard(
     when: credential_id_bytes != raw_id,
     return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
   use client_data_json <- result.try(
-    internal.decode_base64url(response.client_data_json, "clientDataJSON")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(
+      response.client_data_json,
+      "clientDataJSON",
+    )),
   )
   use authenticator_data <- result.try(
-    internal.decode_base64url(response.authenticator_data, "authenticatorData")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(
+      response.authenticator_data,
+      "authenticatorData",
+    )),
   )
   use signature <- result.try(
-    internal.decode_base64url(response.signature, "signature")
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.decode_base64url(response.signature, "signature")),
   )
 
   use <- bool.guard(
@@ -419,19 +416,17 @@ pub fn verify(
   )
 
   use client_data <- result.try(
-    internal.parse_client_data(client_data_json)
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.parse_client_data(client_data_json)),
   )
   use _ <- result.try(
-    internal.verify_client_data(
+    wrap_error(internal.verify_client_data(
       client_data,
       expected_type: "webauthn.get",
       expected_challenge: challenge.data.bytes,
       expected_origins: challenge.data.origins,
       allow_cross_origin: challenge.data.allow_cross_origin,
       allowed_top_origins: challenge.data.allowed_top_origins,
-    )
-    |> result.map_error(internal_error_to_authentication_error),
+    )),
   )
 
   use client_data_hash <- result.try(
@@ -440,37 +435,32 @@ pub fn verify(
   )
 
   use auth_data <- result.try(
-    internal.parse_authentication_auth_data(authenticator_data)
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.parse_authentication_auth_data(authenticator_data)),
   )
 
   use _ <- result.try(
-    internal.verify_rp_id(auth_data.rp_id_hash, challenge.data.rp_id)
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.verify_rp_id(auth_data.rp_id_hash, challenge.data.rp_id)),
   )
   use _ <- result.try(
-    internal.verify_user_policies(
+    wrap_error(internal.verify_user_policies(
       auth_data.user_present,
       auth_data.user_verified,
       challenge.data.user_verification,
-    )
-    |> result.map_error(internal_error_to_authentication_error),
+    )),
   )
 
   let signed_data = bit_array.concat([authenticator_data, client_data_hash])
   let glasslock.PublicKey(public_key_cbor) = stored.public_key
   use #(parsed_key, alg) <- result.try(
-    internal.parse_public_key(public_key_cbor)
-    |> result.map_error(internal_error_to_authentication_error),
+    wrap_error(internal.parse_public_key(public_key_cbor)),
   )
   use _ <- result.try(
-    internal.verify_signature(
+    wrap_error(internal.verify_signature(
       parsed_key,
       alg:,
       message: signed_data,
       signature:,
-    )
-    |> result.map_error(internal_error_to_authentication_error),
+    )),
   )
 
   // Sign count 0 means the authenticator does not track signature counts.
@@ -520,13 +510,15 @@ fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
   |> result.replace_error(ParseError("Invalid authentication response JSON"))
 }
 
-fn internal_error_to_authentication_error(error: internal.Error) -> Error {
-  case error {
-    internal.VerificationMismatch(field) -> VerificationMismatch(field)
-    internal.UnsupportedKey(reason) -> UnsupportedKey(reason)
-    internal.ParseError(message) -> ParseError(message)
-    internal.UserPresenceFailed -> UserPresenceFailed
-    internal.UserVerificationFailed -> UserVerificationFailed
-    internal.SignatureVerificationFailed -> InvalidSignature
-  }
+fn wrap_error(result: Result(a, internal.Error)) -> Result(a, Error) {
+  result.map_error(result, fn(error) {
+    case error {
+      internal.VerificationMismatch(field) -> VerificationMismatch(field)
+      internal.UnsupportedKey(reason) -> UnsupportedKey(reason)
+      internal.ParseError(message) -> ParseError(message)
+      internal.UserPresenceFailed -> UserPresenceFailed
+      internal.UserVerificationFailed -> UserVerificationFailed
+      internal.SignatureVerificationFailed -> InvalidSignature
+    }
+  })
 }

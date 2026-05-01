@@ -379,6 +379,20 @@ pub fn build_attestation_object_with_fmt(
   )
 }
 
+/// Build a `fmt: "none"` attestation object with a non-empty `attStmt`. Use
+/// to exercise the "none attestation with non-empty statement" rejection.
+pub fn build_attestation_object_with_non_empty_attstmt(
+  auth_data auth_data: BitArray,
+) -> BitArray {
+  cbor.encode(
+    cbor.Map([
+      #(cbor.String("fmt"), cbor.String("none")),
+      #(cbor.String("authData"), cbor.Bytes(auth_data)),
+      #(cbor.String("attStmt"), cbor.Map([#(cbor.String("alg"), cbor.Int(-7))])),
+    ]),
+  )
+}
+
 /// Build authenticator data for registration (includes attested credential).
 /// Pass `cose_key(keypair)` for the COSE key parameter.
 pub fn build_registration_authenticator_data(
