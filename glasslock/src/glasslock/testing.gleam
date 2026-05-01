@@ -161,6 +161,7 @@ pub fn to_authentication_json(
     signature: response.signature,
     user_handle:,
     credential_type: "public-key",
+    id_override: option.None,
   )
 }
 
@@ -168,6 +169,10 @@ pub fn to_authentication_json(
 ///
 /// Exposed so tests can exercise malformed inputs (wrong `type`, mismatched
 /// signature, swapped credential_id) without hand-rolling the JSON wrapper.
+///
+/// Pass `id_override: Some(s)` to set the top-level `id` field independently
+/// from `rawId` (used by mismatch tests). `None` keeps both derived from
+/// `credential_id`.
 pub fn to_authentication_json_with(
   credential_id credential_id: glasslock.CredentialId,
   authenticator_data authenticator_data: BitArray,
@@ -175,6 +180,7 @@ pub fn to_authentication_json_with(
   signature signature: BitArray,
   user_handle user_handle: Option(BitArray),
   credential_type credential_type: String,
+  id_override id_override: Option(String),
 ) -> String {
   let user_handle_json = case user_handle {
     option.Some(handle) -> b64_json(handle)
@@ -182,8 +188,12 @@ pub fn to_authentication_json_with(
   }
 
   let glasslock.CredentialId(raw_credential_id) = credential_id
+  let id_json = case id_override {
+    option.Some(s) -> json.string(s)
+    option.None -> b64_json(raw_credential_id)
+  }
   json.object([
-    #("id", b64_json(raw_credential_id)),
+    #("id", id_json),
     #("rawId", b64_json(raw_credential_id)),
     #("type", json.string(credential_type)),
     #(
@@ -475,6 +485,7 @@ pub fn to_registration_json(response: RegistrationResponse) -> String {
     attestation_object: response.attestation_object,
     credential_type: "public-key",
     transports: [],
+    id_override: option.None,
   )
 }
 
@@ -483,12 +494,17 @@ pub fn to_registration_json(response: RegistrationResponse) -> String {
 /// Exposed so tests can exercise malformed inputs (wrong `type`, swapped
 /// credential_id, mismatched attestation) without hand-rolling the JSON
 /// wrapper.
+///
+/// Pass `id_override: Some(s)` to set the top-level `id` field independently
+/// from `rawId` (used by mismatch tests). `None` keeps both derived from
+/// `credential_id`.
 pub fn to_registration_json_with(
   credential_id credential_id: glasslock.CredentialId,
   client_data_json client_data_json: BitArray,
   attestation_object attestation_object: BitArray,
   credential_type credential_type: String,
   transports transports: List(glasslock.Transport),
+  id_override id_override: Option(String),
 ) -> String {
   let glasslock.CredentialId(raw_credential_id) = credential_id
   let response_fields = [
@@ -509,8 +525,12 @@ pub fn to_registration_json_with(
       ..response_fields
     ]
   }
+  let id_json = case id_override {
+    option.Some(s) -> json.string(s)
+    option.None -> b64_json(raw_credential_id)
+  }
   json.object([
-    #("id", b64_json(raw_credential_id)),
+    #("id", id_json),
     #("rawId", b64_json(raw_credential_id)),
     #("type", json.string(credential_type)),
     #("response", json.object(response_fields)),

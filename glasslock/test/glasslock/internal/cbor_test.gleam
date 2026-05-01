@@ -53,11 +53,17 @@ pub fn decode_empty_input_test() {
   assert cbor.decode_all(<<>>) == Error("Unexpected end of CBOR input")
 }
 
-pub fn decode_truncated_input_test() {
+pub fn decode_rejects_truncated_one_byte_argument_test() {
   assert cbor.decode(<<0x18>>)
     == Error("Truncated CBOR: expected 1 byte argument")
+}
+
+pub fn decode_rejects_truncated_two_byte_argument_test() {
   assert cbor.decode(<<0x19, 0x01>>)
     == Error("Truncated CBOR: expected 2 byte argument")
+}
+
+pub fn decode_rejects_truncated_byte_string_test() {
   assert cbor.decode(<<0x43, 0x01, 0x02>>)
     == Error("Truncated CBOR byte string")
 }

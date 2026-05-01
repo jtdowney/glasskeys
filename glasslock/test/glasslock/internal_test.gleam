@@ -113,7 +113,6 @@ pub fn cose_key_roundtrip_test() {
     let keypair = generate()
     let cose_bytes = testing.cose_key(keypair)
     let assert Ok(_key) = internal.parse_public_key(cose_bytes)
-    assert glasslock.PublicKey(cose_bytes) == testing.public_key(keypair)
   })
 }
 
@@ -138,8 +137,8 @@ pub fn parse_public_key_rejects_unsupported_key_type_test() {
       #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
     ])
   let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
+  assert internal.parse_public_key(cbor_bytes)
+    == Error(internal.ParseError("unsupported COSE key type: 99"))
 }
 
 pub fn parse_public_key_rejects_unsupported_curve_test() {

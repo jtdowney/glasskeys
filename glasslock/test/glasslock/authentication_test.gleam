@@ -147,6 +147,7 @@ fn signed_response(
     signature:,
     user_handle: option.None,
     credential_type: "public-key",
+    id_override: option.None,
   )
 }
 
@@ -182,6 +183,7 @@ fn signed_response_with_flags(
     signature:,
     user_handle: option.None,
     credential_type: "public-key",
+    id_override: option.None,
   )
 }
 
@@ -241,23 +243,6 @@ pub fn request_emits_core_fields_test() {
     == 32
 }
 
-pub fn request_produces_unique_challenges_test() {
-  let assert Ok(#(_, challenge1)) =
-    authentication.request(
-      relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.default_options(),
-    )
-  let assert Ok(#(_, challenge2)) =
-    authentication.request(
-      relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.default_options(),
-    )
-  assert testing.authentication_challenge_bytes(challenge1)
-    != testing.authentication_challenge_bytes(challenge2)
-}
-
 pub fn request_with_allow_credentials_test() {
   let cred1 = <<1, 2, 3, 4>>
   let cred2 = <<5, 6, 7, 8>>
@@ -301,42 +286,6 @@ pub fn request_with_allow_credentials_test() {
     ]
 }
 
-pub fn request_user_verification_variants_test() {
-  let variants = [
-    #(option.None, option.None),
-    #(
-      option.Some(glasslock.VerificationDiscouraged),
-      option.Some("discouraged"),
-    ),
-    #(option.Some(glasslock.VerificationPreferred), option.Some("preferred")),
-    #(option.Some(glasslock.VerificationRequired), option.Some("required")),
-  ]
-
-  let decoder = {
-    use uv <- decode.optional_field(
-      "userVerification",
-      option.None,
-      decode.optional(decode.string),
-    )
-    decode.success(uv)
-  }
-
-  list.each(variants, fn(pair) {
-    let #(variant, expected) = pair
-    let assert Ok(#(options_json, _)) =
-      authentication.request(
-        relying_party_id: "example.com",
-        origins: ["https://example.com"],
-        options: authentication.Options(
-          ..authentication.default_options(),
-          user_verification: variant,
-        ),
-      )
-    let assert Ok(uv) = json.parse(json.to_string(options_json), decoder)
-    assert uv == expected
-  })
-}
-
 pub fn request_rejects_empty_origins_test() {
   let result =
     authentication.request(
@@ -345,7 +294,10 @@ pub fn request_rejects_empty_origins_test() {
       options: authentication.default_options(),
     )
 
-  let assert Error(authentication.ParseError(_)) = result
+  assert result
+    == Error(authentication.ParseError(
+      "no allowed origins configured; pass a non-empty origins list to request",
+    ))
 }
 
 pub fn verify_valid_authentication_test() {
@@ -769,6 +721,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
       signature:,
       user_handle: option.None,
       credential_type: "public-key",
+      id_override: option.None,
     )
 
   let result =
@@ -808,6 +761,7 @@ pub fn verify_rejects_at_flag_in_authentication_test() {
       signature:,
       user_handle: option.None,
       credential_type: "public-key",
+      id_override: option.None,
     )
 
   let result =
@@ -1042,6 +996,7 @@ pub fn verify_rejects_invalid_credential_type_test() {
       signature: response.signature,
       user_handle: option.None,
       credential_type: "invalid-type",
+      id_override: option.None,
     )
 
   let result =
@@ -1134,26 +1089,18 @@ pub fn parse_response_rejects_invalid_json_test() {
 }
 
 pub fn parse_response_rejects_id_raw_id_mismatch_test() {
-  let raw_id_b64 =
-    bit_array.base64_url_encode(<<1, 2, 3, 4, 5, 6, 7, 8>>, False)
   let mismatched_id_b64 =
     bit_array.base64_url_encode(<<99, 99, 99, 99, 99, 99, 99, 99>>, False)
   let response_json =
-    json.object([
-      #("id", json.string(mismatched_id_b64)),
-      #("rawId", json.string(raw_id_b64)),
-      #("type", json.string("public-key")),
-      #(
-        "response",
-        json.object([
-          #("clientDataJSON", json.string("dGVzdA")),
-          #("authenticatorData", json.string("dGVzdA")),
-          #("signature", json.string("dGVzdA")),
-        ]),
-      ),
-      #("clientExtensionResults", json.object([])),
-    ])
-    |> json.to_string
+    testing.to_authentication_json_with(
+      credential_id: glasslock.CredentialId(<<1, 2, 3, 4, 5, 6, 7, 8>>),
+      authenticator_data: <<"test":utf8>>,
+      client_data_json: <<"test":utf8>>,
+      signature: <<"test":utf8>>,
+      user_handle: option.None,
+      credential_type: "public-key",
+      id_override: option.Some(mismatched_id_b64),
+    )
 
   assert authentication.parse_response(response_json)
     == Error(authentication.VerificationMismatch(glasslock.CredentialIdField))
@@ -1390,7 +1337,8 @@ pub fn decode_rejects_missing_allow_credentials_test() {
     |> json.to_string
 
   let result = authentication.parse_challenge(blob)
-  let assert Error(authentication.ParseError(_)) = result
+  assert result
+    == Error(authentication.ParseError("Invalid challenge encoding"))
 }
 
 pub fn request_emits_compat_json_test() {

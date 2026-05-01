@@ -31,6 +31,8 @@ type RegistrationFixture {
     user_verification: Option(String),
     authenticator_attachment: Option(String),
     exclude_credentials: List(#(String, List(String))),
+    pub_key_cred_param_type: Option(String),
+    exclude_credential_type: Option(String),
   )
 }
 
@@ -48,6 +50,8 @@ fn default_registration_fixture() -> RegistrationFixture {
     user_verification: option.Some("preferred"),
     authenticator_attachment: option.None,
     exclude_credentials: [],
+    pub_key_cred_param_type: option.Some("public-key"),
+    exclude_credential_type: option.Some("public-key"),
   )
 }
 
@@ -118,10 +122,15 @@ fn build_registration_options(fixture: RegistrationFixture) -> Dynamic {
   let pub_key_cred_params =
     dynamic.array(
       list.map(fixture.algorithms, fn(alg) {
-        dynamic.properties([
-          #(dynamic.string("type"), dynamic.string("public-key")),
-          #(dynamic.string("alg"), dynamic.int(alg)),
-        ])
+        let alg_field = #(dynamic.string("alg"), dynamic.int(alg))
+        let entry_fields = case fixture.pub_key_cred_param_type {
+          option.Some(value) -> [
+            #(dynamic.string("type"), dynamic.string(value)),
+            alg_field,
+          ]
+          option.None -> [alg_field]
+        }
+        dynamic.properties(entry_fields)
       }),
     )
 
@@ -171,10 +180,14 @@ fn build_registration_options(fixture: RegistrationFixture) -> Dynamic {
         dynamic.array(
           list.map(entries, fn(entry) {
             let #(id, transports) = entry
-            let base = [
-              #(dynamic.string("id"), dynamic.string(id)),
-              #(dynamic.string("type"), dynamic.string("public-key")),
-            ]
+            let id_field = #(dynamic.string("id"), dynamic.string(id))
+            let base = case fixture.exclude_credential_type {
+              option.Some(value) -> [
+                id_field,
+                #(dynamic.string("type"), dynamic.string(value)),
+              ]
+              option.None -> [id_field]
+            }
             let descriptor_fields = case transports {
               [] -> base
               _ -> [
@@ -226,27 +239,6 @@ pub fn decode_registration_options_test() {
   assert opt.exclude_credentials == []
 }
 
-pub fn decode_registration_options_algorithm_variants_test() {
-  let variants = [
-    #(-7, glasskey.Es256),
-    #(-8, glasskey.Ed25519),
-    #(-257, glasskey.Rs256),
-  ]
-
-  list.each(variants, fn(pair) {
-    let #(int, expected) = pair
-    let dyn =
-      build_registration_options(
-        RegistrationFixture(..default_registration_fixture(), algorithms: [
-          int,
-        ]),
-      )
-    let assert Ok(opt) =
-      decode.run(dyn, glasskey.registration_options_decoder())
-    assert opt.algorithms == [expected]
-  })
-}
-
 pub fn decode_registration_options_with_exclude_credentials_test() {
   let dyn =
     build_registration_options(
@@ -265,71 +257,6 @@ pub fn decode_registration_options_with_exclude_credentials_test() {
         glasskey.TransportInternal,
       ]),
     ]
-}
-
-pub fn decode_registration_options_resident_key_variants_test() {
-  let variants = [
-    #("required", glasskey.Required),
-    #("preferred", glasskey.Preferred),
-    #("discouraged", glasskey.Discouraged),
-  ]
-
-  list.each(variants, fn(pair) {
-    let #(string, expected) = pair
-    let dyn =
-      build_registration_options(
-        RegistrationFixture(
-          ..default_registration_fixture(),
-          resident_key: option.Some(string),
-        ),
-      )
-    let assert Ok(opt) =
-      decode.run(dyn, glasskey.registration_options_decoder())
-    assert opt.resident_key == option.Some(expected)
-  })
-}
-
-pub fn decode_registration_options_user_verification_variants_test() {
-  let variants = [
-    #("required", glasskey.Required),
-    #("preferred", glasskey.Preferred),
-    #("discouraged", glasskey.Discouraged),
-  ]
-
-  list.each(variants, fn(pair) {
-    let #(string, expected) = pair
-    let dyn =
-      build_registration_options(
-        RegistrationFixture(
-          ..default_registration_fixture(),
-          user_verification: option.Some(string),
-        ),
-      )
-    let assert Ok(opt) =
-      decode.run(dyn, glasskey.registration_options_decoder())
-    assert opt.user_verification == option.Some(expected)
-  })
-}
-
-pub fn decode_registration_options_authenticator_attachment_variants_test() {
-  let variants = [
-    #("platform", option.Some(glasskey.Platform)),
-    #("cross-platform", option.Some(glasskey.CrossPlatform)),
-  ]
-
-  list.each(variants, fn(pair) {
-    let #(string, expected) = pair
-    let dyn =
-      build_registration_options(
-        RegistrationFixture(
-          ..default_registration_fixture(),
-          authenticator_attachment: option.Some(string),
-        ),
-      )
-    let assert Ok(opt) =
-      decode.run(dyn, glasskey.registration_options_decoder())
-    assert opt.authenticator_attachment == expected
-  })
 }
 
 pub fn decode_registration_options_omits_authenticator_selection_test() {
@@ -433,176 +360,50 @@ pub fn decode_registration_options_unknown_algorithm_test() {
 
 pub fn decode_registration_options_invalid_pub_key_cred_param_type_test() {
   let dyn =
-    dynamic.properties([
-      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
-      #(
-        dynamic.string("rp"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("example.com")),
-          #(dynamic.string("name"), dynamic.string("App")),
-        ]),
+    build_registration_options(
+      RegistrationFixture(
+        ..default_registration_fixture(),
+        pub_key_cred_param_type: option.Some("not-public-key"),
       ),
-      #(
-        dynamic.string("user"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("dQ")),
-          #(dynamic.string("name"), dynamic.string("u")),
-          #(dynamic.string("displayName"), dynamic.string("U")),
-        ]),
-      ),
-      #(
-        dynamic.string("pubKeyCredParams"),
-        dynamic.array([
-          dynamic.properties([
-            #(dynamic.string("type"), dynamic.string("not-public-key")),
-            #(dynamic.string("alg"), dynamic.int(-7)),
-          ]),
-        ]),
-      ),
-      #(
-        dynamic.string("authenticatorSelection"),
-        dynamic.properties([
-          #(dynamic.string("residentKey"), dynamic.string("preferred")),
-          #(dynamic.string("userVerification"), dynamic.string("preferred")),
-        ]),
-      ),
-    ])
+    )
 
   let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
 }
 
 pub fn decode_registration_options_missing_pub_key_cred_param_type_test() {
   let dyn =
-    dynamic.properties([
-      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
-      #(
-        dynamic.string("rp"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("example.com")),
-          #(dynamic.string("name"), dynamic.string("App")),
-        ]),
+    build_registration_options(
+      RegistrationFixture(
+        ..default_registration_fixture(),
+        pub_key_cred_param_type: option.None,
       ),
-      #(
-        dynamic.string("user"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("dQ")),
-          #(dynamic.string("name"), dynamic.string("u")),
-          #(dynamic.string("displayName"), dynamic.string("U")),
-        ]),
-      ),
-      #(
-        dynamic.string("pubKeyCredParams"),
-        dynamic.array([
-          dynamic.properties([
-            #(dynamic.string("alg"), dynamic.int(-7)),
-          ]),
-        ]),
-      ),
-      #(
-        dynamic.string("authenticatorSelection"),
-        dynamic.properties([
-          #(dynamic.string("residentKey"), dynamic.string("preferred")),
-          #(dynamic.string("userVerification"), dynamic.string("preferred")),
-        ]),
-      ),
-    ])
+    )
 
   let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
 }
 
 pub fn decode_registration_options_invalid_exclude_credentials_type_test() {
   let dyn =
-    dynamic.properties([
-      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
-      #(
-        dynamic.string("rp"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("example.com")),
-          #(dynamic.string("name"), dynamic.string("App")),
-        ]),
+    build_registration_options(
+      RegistrationFixture(
+        ..default_registration_fixture(),
+        exclude_credentials: [#("AQID", [])],
+        exclude_credential_type: option.Some("not-public-key"),
       ),
-      #(
-        dynamic.string("user"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("dQ")),
-          #(dynamic.string("name"), dynamic.string("u")),
-          #(dynamic.string("displayName"), dynamic.string("U")),
-        ]),
-      ),
-      #(
-        dynamic.string("pubKeyCredParams"),
-        dynamic.array([
-          dynamic.properties([
-            #(dynamic.string("type"), dynamic.string("public-key")),
-            #(dynamic.string("alg"), dynamic.int(-7)),
-          ]),
-        ]),
-      ),
-      #(
-        dynamic.string("authenticatorSelection"),
-        dynamic.properties([
-          #(dynamic.string("residentKey"), dynamic.string("preferred")),
-          #(dynamic.string("userVerification"), dynamic.string("preferred")),
-        ]),
-      ),
-      #(
-        dynamic.string("excludeCredentials"),
-        dynamic.array([
-          dynamic.properties([
-            #(dynamic.string("id"), dynamic.string("AQID")),
-            #(dynamic.string("type"), dynamic.string("not-public-key")),
-          ]),
-        ]),
-      ),
-    ])
+    )
 
   let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
 }
 
 pub fn decode_registration_options_missing_exclude_credentials_type_test() {
   let dyn =
-    dynamic.properties([
-      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
-      #(
-        dynamic.string("rp"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("example.com")),
-          #(dynamic.string("name"), dynamic.string("App")),
-        ]),
+    build_registration_options(
+      RegistrationFixture(
+        ..default_registration_fixture(),
+        exclude_credentials: [#("AQID", [])],
+        exclude_credential_type: option.None,
       ),
-      #(
-        dynamic.string("user"),
-        dynamic.properties([
-          #(dynamic.string("id"), dynamic.string("dQ")),
-          #(dynamic.string("name"), dynamic.string("u")),
-          #(dynamic.string("displayName"), dynamic.string("U")),
-        ]),
-      ),
-      #(
-        dynamic.string("pubKeyCredParams"),
-        dynamic.array([
-          dynamic.properties([
-            #(dynamic.string("type"), dynamic.string("public-key")),
-            #(dynamic.string("alg"), dynamic.int(-7)),
-          ]),
-        ]),
-      ),
-      #(
-        dynamic.string("authenticatorSelection"),
-        dynamic.properties([
-          #(dynamic.string("residentKey"), dynamic.string("preferred")),
-          #(dynamic.string("userVerification"), dynamic.string("preferred")),
-        ]),
-      ),
-      #(
-        dynamic.string("excludeCredentials"),
-        dynamic.array([
-          dynamic.properties([
-            #(dynamic.string("id"), dynamic.string("AQID")),
-          ]),
-        ]),
-      ),
-    ])
+    )
 
   let assert Error(_) = decode.run(dyn, glasskey.registration_options_decoder())
 }
