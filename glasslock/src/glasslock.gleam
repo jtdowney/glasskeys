@@ -75,12 +75,47 @@ pub type PublicKey {
   PublicKey(BitArray)
 }
 
+/// Transport hints reported by an authenticator during registration.
+///
+/// Echoed back to the browser in `allow_credentials`/`exclude_credentials` so
+/// it can route the request to the right authenticator. Optional for
+/// correctness; helpful for UX, especially with hybrid (cross-device)
+/// transports.
+pub type Transport {
+  /// Removable USB authenticator.
+  TransportUsb
+  /// Near-field communication authenticator.
+  TransportNfc
+  /// Bluetooth Low Energy authenticator.
+  TransportBle
+  /// ISO/IEC 7816 smart card with contacts.
+  TransportSmartCard
+  /// Cross-device authenticator (e.g. phone acting as a roaming key).
+  TransportHybrid
+  /// Built-in platform authenticator (Touch ID, Windows Hello, etc.).
+  TransportInternal
+}
+
+/// A reference to a stored credential, used in `allowCredentials` and
+/// `excludeCredentials` lists. Carrying transports is optional but lets the
+/// browser route the ceremony to the right authenticator faster.
+pub type CredentialDescriptor {
+  CredentialDescriptor(id: CredentialId, transports: List(Transport))
+}
+
 /// A verified WebAuthn credential returned after successful registration or authentication.
 ///
-/// Store the `id`, `public_key`, and `sign_count` after registration. Update `sign_count`
-/// after each successful authentication to detect cloned authenticators.
+/// Store the `id`, `public_key`, `sign_count`, and `transports` after
+/// registration. Update `sign_count` after each successful authentication to
+/// detect cloned authenticators. To use a stored credential in a subsequent
+/// ceremony, build a `CredentialDescriptor` from its `id` and `transports`.
 pub type Credential {
-  Credential(id: CredentialId, public_key: PublicKey, sign_count: Int)
+  Credential(
+    id: CredentialId,
+    public_key: PublicKey,
+    sign_count: Int,
+    transports: List(Transport),
+  )
 }
 
 /// Identifies which field failed verification in a `VerificationMismatch` error.

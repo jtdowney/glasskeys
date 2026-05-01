@@ -12,7 +12,12 @@
 ////     origins: ["https://example.com"],
 ////     options: authentication.Options(
 ////       ..authentication.default_options(),
-////       allow_credentials: [stored_credential.id],
+////       allow_credentials: [
+////         glasslock.CredentialDescriptor(
+////           id: stored_credential.id,
+////           transports: stored_credential.transports,
+////         ),
+////       ],
 ////     ),
 ////   )
 ////
@@ -82,8 +87,11 @@ pub type Options {
     user_verification: Option(glasslock.UserVerification),
     /// Whether to allow cross-origin requests. Defaults to `False`.
     allow_cross_origin: Bool,
-    /// Credential IDs the user may authenticate with. Empty for discoverable flow.
-    allow_credentials: List(glasslock.CredentialId),
+    /// Credentials the user may authenticate with. Empty for discoverable flow.
+    /// Build each entry from a stored `glasslock.Credential` with
+    /// `glasslock.CredentialDescriptor(id:, transports:)` so transport hints
+    /// are preserved; pass an empty `transports` list if not stored.
+    allow_credentials: List(glasslock.CredentialDescriptor),
     /// Allowed top-level origins for cross-origin iframe verification. The
     /// allowlist is consulted only when the browser supplies a `topOrigin`
     /// field; older browsers omit the field even for cross-origin requests,
@@ -126,7 +134,7 @@ pub type Error {
 pub opaque type Challenge {
   Challenge(
     data: internal.ChallengeData,
-    allowed_credentials: List(glasslock.CredentialId),
+    allowed_credentials: List(glasslock.CredentialDescriptor),
   )
 }
 
@@ -155,9 +163,18 @@ type ParsedResponse {
 /// security is a common fit.
 pub fn encode_challenge(challenge: Challenge) -> String {
   let allow_credentials =
-    json.array(challenge.allowed_credentials, fn(cred_id) {
-      let glasslock.CredentialId(raw) = cred_id
-      json.string(bit_array.base64_url_encode(raw, False))
+    json.array(challenge.allowed_credentials, fn(descriptor) {
+      let glasslock.CredentialDescriptor(id:, transports:) = descriptor
+      let glasslock.CredentialId(raw) = id
+      json.object([
+        #("id", json.string(bit_array.base64_url_encode(raw, False))),
+        #(
+          "transports",
+          json.array(transports, fn(t) {
+            json.string(internal.transport_to_string(t))
+          }),
+        ),
+      ])
     })
 
   [
@@ -178,7 +195,7 @@ pub fn challenge_data(challenge: Challenge) -> internal.ChallengeData {
 @internal
 pub fn challenge_allowed_credentials(
   challenge: Challenge,
-) -> List(glasslock.CredentialId) {
+) -> List(glasslock.CredentialDescriptor) {
   challenge.allowed_credentials
 }
 
@@ -186,12 +203,25 @@ pub fn challenge_allowed_credentials(
 /// `ParseError` if the blob is malformed, encodes a registration challenge,
 /// or uses an unsupported format version.
 pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
-  let decoder = {
-    use ids <- decode.field("allow_credentials", decode.list(decode.string))
-    decode.success(ids)
+  let descriptor_decoder = {
+    use id_b64 <- decode.field("id", decode.string)
+    use transports <- decode.optional_field(
+      "transports",
+      [],
+      decode.list(decode.string),
+    )
+    decode.success(#(id_b64, transports))
   }
 
-  use #(data, allow_ids) <- result.try(
+  let decoder = {
+    use entries <- decode.field(
+      "allow_credentials",
+      decode.list(descriptor_decoder),
+    )
+    decode.success(entries)
+  }
+
+  use #(data, entries) <- result.try(
     internal.parse_challenge_shared(
       encoded,
       expected_kind: "authentication",
@@ -199,17 +229,26 @@ pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
     )
     |> result.map_error(internal_error_to_authentication_error),
   )
-  use allowed_credentials <- result.try(parse_allow_credentials(allow_ids))
+  use allowed_credentials <- result.try(parse_allow_credentials(entries))
   Ok(Challenge(data:, allowed_credentials:))
 }
 
 fn parse_allow_credentials(
-  encoded: List(String),
-) -> Result(List(glasslock.CredentialId), Error) {
-  list.try_map(encoded, fn(id_b64) {
-    internal.decode_base64url(id_b64, "allow_credentials")
-    |> result.map(glasslock.CredentialId)
-    |> result.map_error(internal_error_to_authentication_error)
+  entries: List(#(String, List(String))),
+) -> Result(List(glasslock.CredentialDescriptor), Error) {
+  list.try_map(entries, fn(entry) {
+    let #(id_b64, transport_strings) = entry
+    use raw <- result.try(
+      internal.decode_base64url(id_b64, "allow_credentials")
+      |> result.map_error(internal_error_to_authentication_error),
+    )
+    Ok(glasslock.CredentialDescriptor(
+      id: glasslock.CredentialId(raw),
+      transports: list.filter_map(
+        transport_strings,
+        internal.transport_from_string,
+      ),
+    ))
   })
 }
 
@@ -366,12 +405,10 @@ pub fn verify(
   // the caller looked up. Both are required: the allow-list enforces the
   // RP's policy, and the stored-ID match prevents using one credential's
   // response to authenticate as another.
+  let presented_id = glasslock.CredentialId(raw_id)
   use <- bool.guard(
     when: !list.is_empty(challenge.allowed_credentials)
-      && !list.contains(
-      challenge.allowed_credentials,
-      glasslock.CredentialId(raw_id),
-    ),
+      && !list.any(challenge.allowed_credentials, fn(d) { d.id == presented_id }),
     return: Error(CredentialNotAllowed),
   )
   use <- bool.guard(

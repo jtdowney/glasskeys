@@ -83,8 +83,11 @@ pub type Options {
     /// because it is the one algorithm every mainstream authenticator handles;
     /// opt in to `Ed25519` or `Rs256` when broader coverage is desired.
     algorithms: List(Algorithm),
-    /// Credential IDs to exclude (prevent re-registration).
-    exclude_credentials: List(glasslock.CredentialId),
+    /// Credentials to exclude (prevent re-registration). Build each entry
+    /// from a stored `glasslock.Credential` with
+    /// `glasslock.CredentialDescriptor(id:, transports:)` so transport hints
+    /// are preserved.
+    exclude_credentials: List(glasslock.CredentialDescriptor),
     /// Allowed top-level origins for cross-origin iframe verification. The
     /// allowlist is consulted only when the browser supplies a `topOrigin`
     /// field; older browsers omit the field even for cross-origin requests,
@@ -151,6 +154,7 @@ type ParsedResponse {
     credential_type: String,
     client_data_json: String,
     attestation_object: String,
+    transports: List(String),
   )
 }
 
@@ -521,6 +525,10 @@ pub fn verify(
     id: glasslock.CredentialId(attested.credential_id),
     public_key: glasslock.PublicKey(attested.public_key_cbor),
     sign_count: auth_data.sign_count,
+    transports: list.filter_map(
+      response.transports,
+      internal.transport_from_string,
+    ),
   ))
 }
 
@@ -537,12 +545,18 @@ fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
       ["response", "attestationObject"],
       decode.string,
     )
+    use transports <- decode.then(decode.optionally_at(
+      ["response", "transports"],
+      [],
+      decode.list(decode.string),
+    ))
     decode.success(ParsedResponse(
       raw_id:,
       credential_id:,
       credential_type:,
       client_data_json:,
       attestation_object:,
+      transports:,
     ))
   }
 

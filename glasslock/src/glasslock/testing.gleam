@@ -31,6 +31,7 @@
 
 import glasslock
 import glasslock/authentication
+import glasslock/internal
 import glasslock/internal/cbor
 import glasslock/registration
 import gleam/bit_array
@@ -450,6 +451,7 @@ pub fn to_registration_json(response: RegistrationResponse) -> String {
     client_data_json: response.client_data_json,
     attestation_object: response.attestation_object,
     credential_type: "public-key",
+    transports: [],
   )
 }
 
@@ -463,19 +465,32 @@ pub fn to_registration_json_with(
   client_data_json client_data_json: BitArray,
   attestation_object attestation_object: BitArray,
   credential_type credential_type: String,
+  transports transports: List(glasslock.Transport),
 ) -> String {
   let glasslock.CredentialId(raw_credential_id) = credential_id
+  let response_fields = [
+    #("clientDataJSON", b64_json(client_data_json)),
+    #("attestationObject", b64_json(attestation_object)),
+  ]
+  let response_fields = case transports {
+    [] -> response_fields
+    _ -> [
+      #(
+        "transports",
+        json.array(transports, fn(transport) {
+          transport
+          |> internal.transport_to_string
+          |> json.string
+        }),
+      ),
+      ..response_fields
+    ]
+  }
   json.object([
     #("id", b64_json(raw_credential_id)),
     #("rawId", b64_json(raw_credential_id)),
     #("type", json.string(credential_type)),
-    #(
-      "response",
-      json.object([
-        #("clientDataJSON", b64_json(client_data_json)),
-        #("attestationObject", b64_json(attestation_object)),
-      ]),
-    ),
+    #("response", json.object(response_fields)),
     #("clientExtensionResults", json.object([])),
   ])
   |> json.to_string

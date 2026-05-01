@@ -30,7 +30,7 @@ type RegistrationFixture {
     resident_key: Option(String),
     user_verification: Option(String),
     authenticator_attachment: Option(String),
-    exclude_credentials: List(String),
+    exclude_credentials: List(#(String, List(String))),
   )
 }
 
@@ -165,15 +165,27 @@ fn build_registration_options(fixture: RegistrationFixture) -> Dynamic {
 
   let fields = case fixture.exclude_credentials {
     [] -> fields
-    ids -> [
+    entries -> [
       #(
         dynamic.string("excludeCredentials"),
         dynamic.array(
-          list.map(ids, fn(id) {
-            dynamic.properties([
+          list.map(entries, fn(entry) {
+            let #(id, transports) = entry
+            let base = [
               #(dynamic.string("id"), dynamic.string(id)),
               #(dynamic.string("type"), dynamic.string("public-key")),
-            ])
+            ]
+            let descriptor_fields = case transports {
+              [] -> base
+              _ -> [
+                #(
+                  dynamic.string("transports"),
+                  dynamic.array(list.map(transports, dynamic.string)),
+                ),
+                ..base
+              ]
+            }
+            dynamic.properties(descriptor_fields)
           }),
         ),
       ),
@@ -240,13 +252,19 @@ pub fn decode_registration_options_with_exclude_credentials_test() {
     build_registration_options(
       RegistrationFixture(
         ..default_registration_fixture(),
-        exclude_credentials: ["AQID"],
+        exclude_credentials: [#("AQID", ["usb", "internal"])],
       ),
     )
 
   let assert Ok(opt) = decode.run(dyn, glasskey.registration_options_decoder())
 
-  assert opt.exclude_credentials == [<<1, 2, 3>>]
+  assert opt.exclude_credentials
+    == [
+      glasskey.CredentialDescriptor(id: <<1, 2, 3>>, transports: [
+        glasskey.TransportUsb,
+        glasskey.TransportInternal,
+      ]),
+    ]
 }
 
 pub fn decode_registration_options_resident_key_variants_test() {
@@ -620,6 +638,41 @@ pub fn decode_authentication_options_test() {
   assert opt.allow_credentials == []
 }
 
+pub fn decode_authentication_options_drops_unknown_transports_test() {
+  let dyn =
+    dynamic.properties([
+      #(dynamic.string("challenge"), dynamic.string("dGVzdA")),
+      #(
+        dynamic.string("allowCredentials"),
+        dynamic.array([
+          dynamic.properties([
+            #(dynamic.string("id"), dynamic.string("AQID")),
+            #(dynamic.string("type"), dynamic.string("public-key")),
+            #(
+              dynamic.string("transports"),
+              dynamic.array([
+                dynamic.string("usb"),
+                dynamic.string("future-thing"),
+                dynamic.string("hybrid"),
+              ]),
+            ),
+          ]),
+        ]),
+      ),
+    ])
+
+  let assert Ok(opt) =
+    decode.run(dyn, glasskey.authentication_options_decoder())
+
+  assert opt.allow_credentials
+    == [
+      glasskey.CredentialDescriptor(id: <<1, 2, 3>>, transports: [
+        glasskey.TransportUsb,
+        glasskey.TransportHybrid,
+      ]),
+    ]
+}
+
 pub fn decode_authentication_options_with_allow_credentials_test() {
   let dyn =
     dynamic.properties([
@@ -633,6 +686,13 @@ pub fn decode_authentication_options_with_allow_credentials_test() {
           dynamic.properties([
             #(dynamic.string("id"), dynamic.string("AQID")),
             #(dynamic.string("type"), dynamic.string("public-key")),
+            #(
+              dynamic.string("transports"),
+              dynamic.array([
+                dynamic.string("hybrid"),
+                dynamic.string("internal"),
+              ]),
+            ),
           ]),
         ]),
       ),
@@ -641,7 +701,13 @@ pub fn decode_authentication_options_with_allow_credentials_test() {
   let assert Ok(opt) =
     decode.run(dyn, glasskey.authentication_options_decoder())
 
-  assert opt.allow_credentials == [<<1, 2, 3>>]
+  assert opt.allow_credentials
+    == [
+      glasskey.CredentialDescriptor(id: <<1, 2, 3>>, transports: [
+        glasskey.TransportHybrid,
+        glasskey.TransportInternal,
+      ]),
+    ]
   assert opt.user_verification == option.Some(glasskey.Required)
 }
 
@@ -733,6 +799,7 @@ pub fn encode_registration_response_test() {
         raw_id: <<1, 2, 3>>,
         client_data_json: <<"{}":utf8>>,
         attestation_object: <<7, 8, 9>>,
+        transports: ["usb", "nfc"],
       ),
     )
 
@@ -748,16 +815,21 @@ pub fn encode_registration_response_test() {
       ["response", "attestationObject"],
       decode.string,
     )
+    use transports <- decode.subfield(
+      ["response", "transports"],
+      decode.list(decode.string),
+    )
     decode.success(#(
       id,
       raw_id,
       credential_type,
       client_data_json,
       attestation_object,
+      transports,
     ))
   }
 
-  let assert Ok(#(id, raw_id, credential_type, cdj, ao)) =
+  let assert Ok(#(id, raw_id, credential_type, cdj, ao, transports)) =
     json.parse(result, decoder)
 
   assert id == "cred-123"
@@ -765,6 +837,32 @@ pub fn encode_registration_response_test() {
   assert credential_type == "public-key"
   assert cdj == "e30"
   assert ao == "BwgJ"
+  assert transports == ["usb", "nfc"]
+}
+
+pub fn encode_registration_response_omits_transports_when_empty_test() {
+  let result =
+    glasskey.encode_registration_response(
+      glasskey.RegistrationCredential(
+        id: "cred-123",
+        raw_id: <<1, 2, 3>>,
+        client_data_json: <<"{}":utf8>>,
+        attestation_object: <<7, 8, 9>>,
+        transports: [],
+      ),
+    )
+
+  let decoder = {
+    use transports <- decode.then(decode.optionally_at(
+      ["response", "transports"],
+      option.None,
+      decode.optional(decode.list(decode.string)),
+    ))
+    decode.success(transports)
+  }
+
+  let assert Ok(transports) = json.parse(result, decoder)
+  assert transports == option.None
 }
 
 pub fn encode_authentication_response_with_user_handle_test() {
@@ -984,6 +1082,61 @@ pub fn start_registration_succeeds_with_credential_test() {
   promise.resolve(Nil)
 }
 
+pub fn start_registration_includes_transports_when_authenticator_reports_them_test() {
+  use <- with_fake_navigator
+  helpers.set_create_credential_with_transports(
+    raw_id: <<1, 2, 3>>,
+    client_data_json: <<"{}":utf8>>,
+    attestation_object: <<7, 8, 9>>,
+    transports: ["usb", "hybrid"],
+  )
+
+  use result <- promise.await(
+    glasskey.start_registration(default_registration_options()),
+  )
+
+  let assert Ok(json_string) = result
+  let decoder = {
+    use transports <- decode.subfield(
+      ["response", "transports"],
+      decode.list(decode.string),
+    )
+    decode.success(transports)
+  }
+  let assert Ok(transports) = json.parse(json_string, decoder)
+  assert transports == ["usb", "hybrid"]
+
+  promise.resolve(Nil)
+}
+
+pub fn start_registration_omits_transports_when_authenticator_reports_none_test() {
+  use <- with_fake_navigator
+  helpers.set_create_credential_with_transports(
+    raw_id: <<1>>,
+    client_data_json: <<"{}":utf8>>,
+    attestation_object: <<2>>,
+    transports: [],
+  )
+
+  use result <- promise.await(
+    glasskey.start_registration(default_registration_options()),
+  )
+
+  let assert Ok(json_string) = result
+  let decoder = {
+    use transports <- decode.then(decode.optionally_at(
+      ["response", "transports"],
+      option.None,
+      decode.optional(decode.list(decode.string)),
+    ))
+    decode.success(transports)
+  }
+  let assert Ok(transports) = json.parse(json_string, decoder)
+  assert transports == option.None
+
+  promise.resolve(Nil)
+}
+
 pub fn start_registration_returns_not_allowed_when_user_dismisses_test() {
   use <- with_fake_navigator
   helpers.set_create_null()
@@ -1083,7 +1236,12 @@ pub fn start_registration_passes_options_to_navigator_test() {
       rp_id: "passes.example",
       timeout: option.Some(60_000),
       authenticator_attachment: option.Some(glasskey.Platform),
-      exclude_credentials: [<<11, 12>>, <<13, 14>>],
+      exclude_credentials: [
+        glasskey.CredentialDescriptor(id: <<11, 12>>, transports: []),
+        glasskey.CredentialDescriptor(id: <<13, 14>>, transports: [
+          glasskey.TransportUsb,
+        ]),
+      ],
     )
 
   use _ <- promise.await(glasskey.start_registration(opts))
@@ -1094,6 +1252,7 @@ pub fn start_registration_passes_options_to_navigator_test() {
   assert snapshot.timeout == option.Some(60_000)
   assert snapshot.authenticator_attachment == option.Some("platform")
   assert snapshot.exclude_credential_count == 2
+  assert snapshot.exclude_credential_transports == [[], ["usb"]]
   assert snapshot.has_authenticator_selection
   assert snapshot.resident_key == option.Some("required")
   assert snapshot.user_verification == option.Some("preferred")
@@ -1345,7 +1504,16 @@ pub fn start_authentication_passes_options_to_navigator_test() {
     glasskey.AuthenticationOptions(
       ..default_authentication_options(),
       timeout: option.Some(45_000),
-      allow_credentials: [<<21, 22>>, <<23, 24>>, <<25, 26>>],
+      allow_credentials: [
+        glasskey.CredentialDescriptor(id: <<21, 22>>, transports: []),
+        glasskey.CredentialDescriptor(id: <<23, 24>>, transports: [
+          glasskey.TransportNfc,
+        ]),
+        glasskey.CredentialDescriptor(id: <<25, 26>>, transports: [
+          glasskey.TransportBle,
+          glasskey.TransportSmartCard,
+        ]),
+      ],
     )
 
   use _ <- promise.await(glasskey.start_authentication(opts))
@@ -1355,6 +1523,8 @@ pub fn start_authentication_passes_options_to_navigator_test() {
   assert snapshot.timeout == option.Some(45_000)
   assert snapshot.user_verification == option.Some("required")
   assert snapshot.allow_credential_count == 3
+  assert snapshot.allow_credential_transports
+    == [[], ["nfc"], ["ble", "smart-card"]]
 
   promise.resolve(Nil)
 }

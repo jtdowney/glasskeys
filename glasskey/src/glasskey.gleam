@@ -72,8 +72,54 @@ pub type AuthenticationOptions {
     rp_id: Option(String),
     timeout: Option(Int),
     user_verification: Option(Requirement),
-    allow_credentials: List(BitArray),
+    allow_credentials: List(CredentialDescriptor),
   )
+}
+
+/// A reference to a previously registered credential, with optional
+/// transport hints to help the browser route the ceremony to the right
+/// authenticator.
+pub type CredentialDescriptor {
+  CredentialDescriptor(id: BitArray, transports: List(Transport))
+}
+
+/// Transport hints reported by the authenticator.
+pub type Transport {
+  /// Removable USB authenticator.
+  TransportUsb
+  /// Near-field communication authenticator.
+  TransportNfc
+  /// Bluetooth Low Energy authenticator.
+  TransportBle
+  /// ISO/IEC 7816 smart card.
+  TransportSmartCard
+  /// Cross-device authenticator (e.g. phone acting as a roaming key).
+  TransportHybrid
+  /// Built-in platform authenticator (Touch ID, Windows Hello, etc.).
+  TransportInternal
+}
+
+@internal
+pub fn transport_to_string(transport: Transport) -> String {
+  case transport {
+    TransportUsb -> "usb"
+    TransportNfc -> "nfc"
+    TransportBle -> "ble"
+    TransportSmartCard -> "smart-card"
+    TransportHybrid -> "hybrid"
+    TransportInternal -> "internal"
+  }
+}
+
+@internal
+pub fn classify_dom_exception(name: String, message: String) -> Error {
+  case name {
+    "NotSupportedError" -> NotSupported
+    "NotAllowedError" -> NotAllowed
+    "AbortError" -> Aborted
+    "SecurityError" -> SecurityError
+    _ -> UnknownError(name <> ": " <> message)
+  }
 }
 
 /// Authenticator attachment modality.
@@ -118,6 +164,7 @@ pub type RegistrationCredential {
     raw_id: BitArray,
     client_data_json: BitArray,
     attestation_object: BitArray,
+    transports: List(String),
   )
 }
 
@@ -135,7 +182,7 @@ pub type RegistrationOptions {
     resident_key: Option(Requirement),
     user_verification: Option(Requirement),
     authenticator_attachment: Option(AuthenticatorAttachment),
-    exclude_credentials: List(BitArray),
+    exclude_credentials: List(CredentialDescriptor),
   )
 }
 
@@ -162,15 +209,11 @@ type CreateOptions {
     challenge: BitArray,
     rp: Rp,
     user: User,
-    pub_key_cred_params: array.Array(PubKeyCredParam),
+    pub_key_cred_params: array.Array(Int),
     timeout: Option(Int),
-    authenticator_selection: AuthenticatorSelection,
+    authenticator_selection: Option(AuthenticatorSelection),
     exclude_credentials: array.Array(CredentialDescriptor),
   )
-}
-
-type CredentialDescriptor {
-  CredentialDescriptor(type_: String, id: BitArray)
 }
 
 type GetOptions {
@@ -181,10 +224,6 @@ type GetOptions {
     user_verification: Option(String),
     allow_credentials: array.Array(CredentialDescriptor),
   )
-}
-
-type PubKeyCredParam {
-  PubKeyCredParam(type_: String, alg: Int)
 }
 
 type Rp {
@@ -262,7 +301,7 @@ fn to_get_options(options: AuthenticationOptions) -> GetOptions {
       options.user_verification,
       requirement_to_string,
     ),
-    allow_credentials: to_credential_descriptors(options.allow_credentials),
+    allow_credentials: array.from_list(options.allow_credentials),
   )
 }
 
@@ -307,17 +346,23 @@ pub fn encode_authentication_response(
 pub fn encode_registration_response(
   credential: RegistrationCredential,
 ) -> String {
+  let response_fields = [
+    #("clientDataJSON", b64_json(credential.client_data_json)),
+    #("attestationObject", b64_json(credential.attestation_object)),
+  ]
+  let response_fields = case credential.transports {
+    [] -> response_fields
+    _ -> [
+      #("transports", json.array(credential.transports, json.string)),
+      ..response_fields
+    ]
+  }
+
   json.object([
     #("id", json.string(credential.id)),
     #("rawId", b64_json(credential.raw_id)),
     #("type", json.string("public-key")),
-    #(
-      "response",
-      json.object([
-        #("clientDataJSON", b64_json(credential.client_data_json)),
-        #("attestationObject", b64_json(credential.attestation_object)),
-      ]),
-    ),
+    #("response", json.object(response_fields)),
   ])
   |> json.to_string
 }
@@ -352,7 +397,7 @@ pub fn authentication_options_decoder() -> decode.Decoder(AuthenticationOptions)
   use allow_credentials <- decode.optional_field(
     "allowCredentials",
     [],
-    credential_id_list_decoder(),
+    credential_descriptor_list_decoder(),
   )
   decode.success(AuthenticationOptions(
     challenge:,
@@ -400,7 +445,7 @@ pub fn registration_options_decoder() -> decode.Decoder(RegistrationOptions) {
   use exclude_credentials <- decode.optional_field(
     "excludeCredentials",
     [],
-    credential_id_list_decoder(),
+    credential_descriptor_list_decoder(),
   )
   decode.success(RegistrationOptions(
     challenge:,
@@ -472,12 +517,34 @@ fn base64url_decoder() -> decode.Decoder(BitArray) {
   })
 }
 
-fn credential_id_list_decoder() -> decode.Decoder(List(BitArray)) {
+fn credential_descriptor_list_decoder() -> decode.Decoder(
+  List(CredentialDescriptor),
+) {
   decode.list({
     use _ <- decode.field("type", public_key_credential_type_decoder())
     use id <- decode.field("id", base64url_decoder())
-    decode.success(id)
+    use transport_strings <- decode.optional_field(
+      "transports",
+      [],
+      decode.list(decode.string),
+    )
+    decode.success(CredentialDescriptor(
+      id:,
+      transports: list.filter_map(transport_strings, transport_from_string),
+    ))
   })
+}
+
+fn transport_from_string(value: String) -> Result(Transport, Nil) {
+  case value {
+    "usb" -> Ok(TransportUsb)
+    "nfc" -> Ok(TransportNfc)
+    "ble" -> Ok(TransportBle)
+    "smart-card" -> Ok(TransportSmartCard)
+    "hybrid" -> Ok(TransportHybrid)
+    "internal" -> Ok(TransportInternal)
+    _ -> Error(Nil)
+  }
 }
 
 fn public_key_credential_type_decoder() -> decode.Decoder(Nil) {
@@ -520,6 +587,28 @@ pub fn start_registration(
 }
 
 fn to_create_options(options: RegistrationOptions) -> CreateOptions {
+  let resident_key = option.map(options.resident_key, requirement_to_string)
+  let user_verification =
+    option.map(options.user_verification, requirement_to_string)
+  let authenticator_attachment =
+    option.map(
+      options.authenticator_attachment,
+      authenticator_attachment_to_string,
+    )
+  let authenticator_selection = case
+    resident_key,
+    user_verification,
+    authenticator_attachment
+  {
+    option.None, option.None, option.None -> option.None
+    _, _, _ ->
+      option.Some(AuthenticatorSelection(
+        resident_key:,
+        user_verification:,
+        authenticator_attachment:,
+      ))
+  }
+
   CreateOptions(
     challenge: options.challenge,
     rp: Rp(id: options.rp_id, name: options.rp_name),
@@ -528,24 +617,13 @@ fn to_create_options(options: RegistrationOptions) -> CreateOptions {
       name: options.user_name,
       display_name: options.user_display_name,
     ),
-    pub_key_cred_params: array.from_list(
-      list.map(options.algorithms, fn(alg) {
-        PubKeyCredParam(type_: "public-key", alg: algorithm_to_cose(alg))
-      }),
-    ),
+    pub_key_cred_params: array.from_list(list.map(
+      options.algorithms,
+      algorithm_to_cose,
+    )),
     timeout: options.timeout,
-    authenticator_selection: AuthenticatorSelection(
-      resident_key: option.map(options.resident_key, requirement_to_string),
-      user_verification: option.map(
-        options.user_verification,
-        requirement_to_string,
-      ),
-      authenticator_attachment: option.map(
-        options.authenticator_attachment,
-        authenticator_attachment_to_string,
-      ),
-    ),
-    exclude_credentials: to_credential_descriptors(options.exclude_credentials),
+    authenticator_selection:,
+    exclude_credentials: array.from_list(options.exclude_credentials),
   )
 }
 
@@ -553,14 +631,6 @@ fn to_create_options(options: RegistrationOptions) -> CreateOptions {
 fn create_credential(
   options: CreateOptions,
 ) -> Promise(Result(RegistrationCredential, Error))
-
-fn to_credential_descriptors(
-  ids: List(BitArray),
-) -> array.Array(CredentialDescriptor) {
-  array.from_list(
-    list.map(ids, fn(id) { CredentialDescriptor(type_: "public-key", id:) }),
-  )
-}
 
 fn algorithm_to_cose(algorithm: Algorithm) -> Int {
   case algorithm {

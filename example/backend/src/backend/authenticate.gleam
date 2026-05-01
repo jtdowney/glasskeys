@@ -62,12 +62,20 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
 fn allow_credentials_for_username(
   ctx: web.Context,
   username: String,
-) -> Result(List(glasslock.CredentialId), String) {
+) -> Result(List(glasslock.CredentialDescriptor), String) {
   case username {
     "" -> Ok([])
     name ->
       case credentials.get_user(ctx.credentials, name) {
-        Ok(user) -> Ok(list.map(user.credentials, fn(cred) { cred.id }))
+        Ok(user) ->
+          Ok(
+            list.map(user.credentials, fn(cred) {
+              glasslock.CredentialDescriptor(
+                id: cred.id,
+                transports: cred.transports,
+              )
+            }),
+          )
         Error(_) -> Error("user not found")
       }
   }

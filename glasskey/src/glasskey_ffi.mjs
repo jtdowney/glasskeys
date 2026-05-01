@@ -1,31 +1,30 @@
 import {
-  Option$Some,
   Option$None,
-  Option$isSome,
   Option$Some$0,
+  Option$Some,
+  Option$isSome,
 } from "../gleam_stdlib/gleam/option.mjs";
 import {
-  Error$NotSupported,
+  AuthenticationCredential$AuthenticationCredential,
   Error$NotAllowed,
-  Error$Aborted,
-  Error$SecurityError,
+  Error$NotSupported,
   Error$UnknownError,
+  RegistrationCredential$RegistrationCredential,
+  classify_dom_exception as classifyDomException,
+  transport_to_string as transportToString,
 } from "./glasskey.mjs";
-import { BitArray$BitArray, Result$Ok, Result$Error } from "./gleam.mjs";
+import {
+  BitArray$BitArray,
+  Result$Error,
+  Result$Ok,
+  toList,
+} from "./gleam.mjs";
 
 export function browserSupportsWebauthn() {
   return (
     typeof window !== "undefined" &&
     typeof window.PublicKeyCredential !== "undefined"
   );
-}
-
-function toPublicKeyCredParams(params) {
-  return params.map((p) => ({ type: p.type_, alg: p.alg }));
-}
-
-function toCredentialDescriptors(descriptors) {
-  return descriptors.map((d) => ({ type: d.type_, id: d.id.rawBuffer }));
 }
 
 export async function createCredential(opts) {
@@ -37,25 +36,17 @@ export async function createCredential(opts) {
       name: opts.user.name,
       displayName: opts.user.display_name,
     },
-    pubKeyCredParams: toPublicKeyCredParams(opts.pub_key_cred_params),
+    pubKeyCredParams: [...opts.pub_key_cred_params].map((alg) => ({
+      type: "public-key",
+      alg,
+    })),
   };
 
-  const sel = opts.authenticator_selection;
-  const authenticatorSelection = {};
-  if (Option$isSome(sel.resident_key)) {
-    authenticatorSelection.residentKey = Option$Some$0(sel.resident_key);
-  }
-  if (Option$isSome(sel.user_verification)) {
-    authenticatorSelection.userVerification = Option$Some$0(
-      sel.user_verification,
-    );
-  }
-  if (Option$isSome(sel.authenticator_attachment)) {
-    authenticatorSelection.authenticatorAttachment = Option$Some$0(
-      sel.authenticator_attachment,
-    );
-  }
-  if (Object.keys(authenticatorSelection).length > 0) {
+  const authenticatorSelection = buildAuthenticatorSelection(
+    opts.authenticator_selection,
+  );
+
+  if (authenticatorSelection !== undefined) {
     publicKey.authenticatorSelection = authenticatorSelection;
   }
 
@@ -74,32 +65,33 @@ export async function createCredential(opts) {
     if (!credential) {
       return Result$Error(Error$NotAllowed());
     }
-    return Result$Ok(extractRegistrationFields(credential));
+
+    return Result$Ok(buildRegistrationCredential(credential));
   } catch (error) {
     return Result$Error(classifyJsError(error));
   }
 }
 
-function buildPublicKeyForGet(opts) {
+function buildPublicKey(options) {
   const publicKey = {
-    challenge: opts.challenge.rawBuffer,
+    challenge: options.challenge.rawBuffer,
   };
 
-  if (Option$isSome(opts.user_verification)) {
-    publicKey.userVerification = Option$Some$0(opts.user_verification);
+  if (Option$isSome(options.user_verification)) {
+    publicKey.userVerification = Option$Some$0(options.user_verification);
   }
 
-  if (Option$isSome(opts.rp_id)) {
-    publicKey.rpId = Option$Some$0(opts.rp_id);
+  if (Option$isSome(options.rp_id)) {
+    publicKey.rpId = Option$Some$0(options.rp_id);
   }
 
-  if (Option$isSome(opts.timeout)) {
-    publicKey.timeout = Option$Some$0(opts.timeout);
+  if (Option$isSome(options.timeout)) {
+    publicKey.timeout = Option$Some$0(options.timeout);
   }
 
-  if (opts.allow_credentials.length > 0) {
+  if (options.allow_credentials.length > 0) {
     publicKey.allowCredentials = toCredentialDescriptors(
-      opts.allow_credentials,
+      options.allow_credentials,
     );
   }
 
@@ -107,7 +99,7 @@ function buildPublicKeyForGet(opts) {
 }
 
 export async function getCredential(opts) {
-  const publicKey = buildPublicKeyForGet(opts);
+  const publicKey = buildPublicKey(opts);
 
   try {
     const credential = await navigator.credentials.get({ publicKey });
@@ -115,7 +107,7 @@ export async function getCredential(opts) {
       return Result$Error(Error$NotAllowed());
     }
 
-    return Result$Ok(extractAuthenticationFields(credential));
+    return Result$Ok(buildAuthenticationCredential(credential));
   } catch (error) {
     return Result$Error(classifyJsError(error));
   }
@@ -125,7 +117,7 @@ export async function getCredential(opts) {
 // caller receives the abort handle before the ceremony resolves.
 export function getConditionalCredential(opts) {
   const controller = new AbortController();
-  const publicKey = buildPublicKeyForGet(opts);
+  const publicKey = buildPublicKey(opts);
   return [
     runConditionalGet(publicKey, controller.signal),
     () => controller.abort(),
@@ -136,74 +128,103 @@ async function runConditionalGet(publicKey, signal) {
   if (!(await isConditionalMediationAvailable())) {
     return Result$Error(Error$NotSupported());
   }
+
   try {
     const credential = await navigator.credentials.get({
       publicKey,
       mediation: "conditional",
       signal,
     });
+
     if (!credential) {
       return Result$Error(Error$NotAllowed());
     }
-    return Result$Ok(extractAuthenticationFields(credential));
+
+    return Result$Ok(buildAuthenticationCredential(credential));
   } catch (error) {
     return Result$Error(classifyJsError(error));
   }
 }
 
-function extractRegistrationFields(credential) {
-  return {
-    id: credential.id,
-    raw_id: BitArray$BitArray(new Uint8Array(credential.rawId)),
-    client_data_json: BitArray$BitArray(
-      new Uint8Array(credential.response.clientDataJSON),
-    ),
-    attestation_object: BitArray$BitArray(
-      new Uint8Array(credential.response.attestationObject),
-    ),
-  };
-}
-
-function extractAuthenticationFields(credential) {
-  const user_handle = credential.response.userHandle
-    ? Option$Some(
-        BitArray$BitArray(new Uint8Array(credential.response.userHandle)),
-      )
-    : Option$None();
-
-  return {
-    id: credential.id,
-    raw_id: BitArray$BitArray(new Uint8Array(credential.rawId)),
-    client_data_json: BitArray$BitArray(
-      new Uint8Array(credential.response.clientDataJSON),
-    ),
-    authenticator_data: BitArray$BitArray(
-      new Uint8Array(credential.response.authenticatorData),
-    ),
-    signature: BitArray$BitArray(new Uint8Array(credential.response.signature)),
-    user_handle,
-  };
+function toBitArray(buffer) {
+  return BitArray$BitArray(new Uint8Array(buffer));
 }
 
 function classifyJsError(error) {
   if (error instanceof DOMException) {
-    switch (error.name) {
-      case "NotSupportedError":
-        return Error$NotSupported();
-      case "NotAllowedError":
-        return Error$NotAllowed();
-      case "AbortError":
-        return Error$Aborted();
-      case "SecurityError":
-        return Error$SecurityError();
-      default:
-        return Error$UnknownError(error.name + ": " + error.message);
-    }
+    return classifyDomException(error.name, error.message);
   }
+
   if (error instanceof Error) {
     return Error$UnknownError(error.message);
   }
+
   return Error$UnknownError(String(error));
+}
+
+function buildRegistrationCredential(credential) {
+  const response = credential.response;
+  const transports =
+    typeof response.getTransports === "function"
+      ? response.getTransports()
+      : [];
+
+  return RegistrationCredential$RegistrationCredential(
+    credential.id,
+    toBitArray(credential.rawId),
+    toBitArray(response.clientDataJSON),
+    toBitArray(response.attestationObject),
+    toList(transports),
+  );
+}
+
+function buildAuthenticationCredential(credential) {
+  const response = credential.response;
+  const userHandle = response.userHandle
+    ? Option$Some(toBitArray(response.userHandle))
+    : Option$None();
+
+  return AuthenticationCredential$AuthenticationCredential(
+    credential.id,
+    toBitArray(credential.rawId),
+    toBitArray(response.clientDataJSON),
+    toBitArray(response.authenticatorData),
+    toBitArray(response.signature),
+    userHandle,
+  );
+}
+
+function buildAuthenticatorSelection(selection) {
+  if (!Option$isSome(selection)) {
+    return undefined;
+  }
+
+  const inner = Option$Some$0(selection);
+  const out = {};
+  if (Option$isSome(inner.resident_key)) {
+    out.residentKey = Option$Some$0(inner.resident_key);
+  }
+
+  if (Option$isSome(inner.user_verification)) {
+    out.userVerification = Option$Some$0(inner.user_verification);
+  }
+
+  if (Option$isSome(inner.authenticator_attachment)) {
+    out.authenticatorAttachment = Option$Some$0(inner.authenticator_attachment);
+  }
+
+  return out;
+}
+
+function toCredentialDescriptors(descriptors) {
+  return descriptors.map((d) => {
+    const out = { type: "public-key", id: d.id.rawBuffer };
+    const transports = [...d.transports].map(transportToString);
+    if (transports.length > 0) {
+      out.transports = transports;
+    }
+    return out;
+  });
 }
 
 export async function platformAuthenticatorIsAvailable() {

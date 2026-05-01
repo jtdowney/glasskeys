@@ -96,6 +96,7 @@ fn build_response(
     client_data_json:,
     attestation_object: testing.build_attestation_object(auth_data),
     credential_type: "public-key",
+    transports: [],
   )
 }
 
@@ -140,25 +141,39 @@ pub fn request_with_exclude_credentials_test() {
       registration.Options(
         ..setup_options(glasslock.VerificationPreferred),
         exclude_credentials: [
-          glasslock.CredentialId(cred1),
-          glasslock.CredentialId(cred2),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(cred1),
+            transports: [],
+          ),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(cred2),
+            transports: [glasslock.TransportUsb, glasslock.TransportInternal],
+          ),
         ],
       ),
     )
 
-  let id_decoder = {
+  let entry_decoder = {
     use id <- decode.field("id", decode.string)
-    decode.success(id)
+    use transports <- decode.optional_field(
+      "transports",
+      [],
+      decode.list(decode.string),
+    )
+    decode.success(#(id, transports))
   }
   let decoder = {
-    use ids <- decode.field("excludeCredentials", decode.list(id_decoder))
-    decode.success(ids)
+    use entries <- decode.field(
+      "excludeCredentials",
+      decode.list(entry_decoder),
+    )
+    decode.success(entries)
   }
-  let assert Ok(ids) = json.parse(json.to_string(options_json), decoder)
-  assert ids
+  let assert Ok(entries) = json.parse(json.to_string(options_json), decoder)
+  assert entries
     == [
-      bit_array.base64_url_encode(cred1, False),
-      bit_array.base64_url_encode(cred2, False),
+      #(bit_array.base64_url_encode(cred1, False), []),
+      #(bit_array.base64_url_encode(cred2, False), ["usb", "internal"]),
     ]
 }
 
@@ -310,6 +325,72 @@ pub fn verify_valid_registration_test() {
   assert bit_array.byte_size(raw_public_key) > 0
 }
 
+pub fn verify_stores_reported_transports_test() {
+  let challenge = setup_challenge()
+  let response = testing.build_registration_response(challenge:)
+  let response_json =
+    testing.to_registration_json_with(
+      credential_id: response.credential_id,
+      client_data_json: response.client_data_json,
+      attestation_object: response.attestation_object,
+      credential_type: "public-key",
+      transports: [glasslock.TransportUsb, glasslock.TransportHybrid],
+    )
+
+  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  assert cred.transports == [glasslock.TransportUsb, glasslock.TransportHybrid]
+}
+
+pub fn verify_defaults_transports_to_empty_when_field_missing_test() {
+  let challenge = setup_challenge()
+  let response = testing.build_registration_response(challenge:)
+  let response_json = testing.to_registration_json(response)
+
+  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  assert cred.transports == []
+}
+
+pub fn verify_drops_unknown_transport_strings_test() {
+  let challenge = setup_challenge()
+  let response = testing.build_registration_response(challenge:)
+  let glasslock.CredentialId(raw_credential_id) = response.credential_id
+  let raw_id_b64 = bit_array.base64_url_encode(raw_credential_id, False)
+  let response_json =
+    json.object([
+      #("id", json.string(raw_id_b64)),
+      #("rawId", json.string(raw_id_b64)),
+      #("type", json.string("public-key")),
+      #(
+        "response",
+        json.object([
+          #(
+            "clientDataJSON",
+            json.string(bit_array.base64_url_encode(
+              response.client_data_json,
+              False,
+            )),
+          ),
+          #(
+            "attestationObject",
+            json.string(bit_array.base64_url_encode(
+              response.attestation_object,
+              False,
+            )),
+          ),
+          #(
+            "transports",
+            json.array(["usb", "future-thing", "hybrid"], json.string),
+          ),
+        ]),
+      ),
+      #("clientExtensionResults", json.object([])),
+    ])
+    |> json.to_string
+
+  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  assert cred.transports == [glasslock.TransportUsb, glasslock.TransportHybrid]
+}
+
 pub fn verify_rejects_invalid_json_test() {
   let challenge = setup_challenge()
   let result = registration.verify(response_json: "{not valid json", challenge:)
@@ -453,6 +534,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
       client_data_json:,
       attestation_object: testing.build_attestation_object(auth_data),
       credential_type: "public-key",
+      transports: [],
     )
 
   let result = registration.verify(response_json:, challenge:)
@@ -654,6 +736,7 @@ pub fn verify_rejects_invalid_credential_type_test() {
       client_data_json: response.client_data_json,
       attestation_object: response.attestation_object,
       credential_type: "invalid-type",
+      transports: [],
     )
 
   let result = registration.verify(response_json:, challenge:)
@@ -865,8 +948,14 @@ pub fn request_emits_compat_json_test() {
           registration.Rs256,
         ],
         exclude_credentials: [
-          glasslock.CredentialId(<<10, 11, 12>>),
-          glasslock.CredentialId(<<20, 21, 22, 23>>),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(<<10, 11, 12>>),
+            transports: [],
+          ),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(<<20, 21, 22, 23>>),
+            transports: [glasslock.TransportUsb, glasslock.TransportNfc],
+          ),
         ],
         allowed_top_origins: [],
       ),

@@ -655,7 +655,7 @@ pub fn verify_user_policies(
 pub fn maybe_add_credential_descriptors(
   fields: List(#(String, json.Json)),
   key key: String,
-  credentials credentials: List(glasslock.CredentialId),
+  credentials credentials: List(glasslock.CredentialDescriptor),
 ) -> List(#(String, json.Json)) {
   case credentials {
     [] -> fields
@@ -664,13 +664,50 @@ pub fn maybe_add_credential_descriptors(
 }
 
 fn encode_credential_descriptors(
-  creds: List(glasslock.CredentialId),
+  creds: List(glasslock.CredentialDescriptor),
 ) -> json.Json {
-  json.array(creds, fn(cred_id) {
-    let glasslock.CredentialId(raw_id) = cred_id
-    json.object([
+  json.array(creds, fn(descriptor) {
+    let glasslock.CredentialDescriptor(id:, transports:) = descriptor
+    let glasslock.CredentialId(raw_id) = id
+    let base = [
       #("id", json.string(bit_array.base64_url_encode(raw_id, False))),
       #("type", json.string("public-key")),
-    ])
+    ]
+    let fields = case transports {
+      [] -> base
+      _ -> [
+        #(
+          "transports",
+          json.array(transports, fn(t) { json.string(transport_to_string(t)) }),
+        ),
+        ..base
+      ]
+    }
+    json.object(fields)
   })
+}
+
+pub fn transport_to_string(transport: glasslock.Transport) -> String {
+  case transport {
+    glasslock.TransportUsb -> "usb"
+    glasslock.TransportNfc -> "nfc"
+    glasslock.TransportBle -> "ble"
+    glasslock.TransportSmartCard -> "smart-card"
+    glasslock.TransportHybrid -> "hybrid"
+    glasslock.TransportInternal -> "internal"
+  }
+}
+
+pub fn transport_from_string(
+  value: String,
+) -> Result(glasslock.Transport, Nil) {
+  case value {
+    "usb" -> Ok(glasslock.TransportUsb)
+    "nfc" -> Ok(glasslock.TransportNfc)
+    "ble" -> Ok(glasslock.TransportBle)
+    "smart-card" -> Ok(glasslock.TransportSmartCard)
+    "hybrid" -> Ok(glasslock.TransportHybrid)
+    "internal" -> Ok(glasslock.TransportInternal)
+    _ -> Error(Nil)
+  }
 }

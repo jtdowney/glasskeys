@@ -7,6 +7,7 @@ pub type CreateSnapshot {
     timeout: Option(Int),
     authenticator_attachment: Option(String),
     exclude_credential_count: Int,
+    exclude_credential_transports: List(List(String)),
     resident_key: Option(String),
     user_verification: Option(String),
     has_authenticator_selection: Bool,
@@ -20,6 +21,7 @@ pub type GetSnapshot {
     timeout: Option(Int),
     user_verification: Option(String),
     allow_credential_count: Int,
+    allow_credential_transports: List(List(String)),
   )
 }
 
@@ -37,6 +39,14 @@ pub fn set_create_credential(
   raw_id raw_id: BitArray,
   client_data_json client_data_json: BitArray,
   attestation_object attestation_object: BitArray,
+) -> Nil
+
+@external(javascript, "../glasskey_test_ffi.mjs", "setCreateCredentialWithTransports")
+pub fn set_create_credential_with_transports(
+  raw_id raw_id: BitArray,
+  client_data_json client_data_json: BitArray,
+  attestation_object attestation_object: BitArray,
+  transports transports: List(String),
 ) -> Nil
 
 @external(javascript, "../glasskey_test_ffi.mjs", "setCreateNull")

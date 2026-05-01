@@ -12,8 +12,8 @@ pub fn registration_options_json() -> String {
     #(
       "excludeCredentials",
       json.preprocessed_array([
-        credential_descriptor("CgsM"),
-        credential_descriptor("FBUWFw"),
+        credential_descriptor("CgsM", []),
+        credential_descriptor("FBUWFw", ["usb", "nfc"]),
       ]),
     ),
     #("challenge", json.string("dGVzdC1jaGFsbGVuZ2U")),
@@ -58,8 +58,8 @@ pub fn authentication_options_json() -> String {
     #(
       "allowCredentials",
       json.preprocessed_array([
-        credential_descriptor("Hh8gIQ"),
-        credential_descriptor("KCkq"),
+        credential_descriptor("Hh8gIQ", []),
+        credential_descriptor("KCkq", ["hybrid", "internal"]),
       ]),
     ),
     #("challenge", json.string("dGVzdC1jaGFsbGVuZ2U")),
@@ -69,11 +69,19 @@ pub fn authentication_options_json() -> String {
   |> json.to_string
 }
 
-fn credential_descriptor(id_b64: String) -> json.Json {
-  json.object([
+fn credential_descriptor(
+  id_b64: String,
+  transports: List(String),
+) -> json.Json {
+  let base = [
     #("id", json.string(id_b64)),
     #("type", json.string("public-key")),
-  ])
+  ]
+  let fields = case transports {
+    [] -> base
+    _ -> [#("transports", json.array(transports, json.string)), ..base]
+  }
+  json.object(fields)
 }
 
 fn pub_key_cred_param(alg: Int) -> json.Json {

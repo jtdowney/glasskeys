@@ -142,6 +142,21 @@ export function uninstallFakeNavigator() {
 }
 
 export function setCreateCredential(rawId, clientDataJson, attestationObject) {
+  setCreateCredentialWithTransports(
+    rawId,
+    clientDataJson,
+    attestationObject,
+    toList([]),
+  );
+}
+
+export function setCreateCredentialWithTransports(
+  rawId,
+  clientDataJson,
+  attestationObject,
+  transports,
+) {
+  const transportArray = [...transports];
   createBehavior = {
     kind: "credential",
     value: {
@@ -150,6 +165,7 @@ export function setCreateCredential(rawId, clientDataJson, attestationObject) {
       response: {
         clientDataJSON: clientDataJson.rawBuffer.buffer,
         attestationObject: attestationObject.rawBuffer.buffer,
+        getTransports: () => [...transportArray],
       },
     },
   };
@@ -234,6 +250,12 @@ function optionalNumber(value) {
   return typeof value === "number" ? Option$Some(value) : Option$None();
 }
 
+function descriptorTransportsList(descriptors) {
+  return toList(
+    (descriptors ?? []).map((d) => toList([...(d.transports ?? [])])),
+  );
+}
+
 export function lastCreateSnapshot() {
   if (lastCreateOptions === null) return Result$Error(undefined);
   const pk = lastCreateOptions;
@@ -244,6 +266,7 @@ export function lastCreateSnapshot() {
       optionalNumber(pk.timeout),
       optionalString(pk.authenticatorSelection?.authenticatorAttachment),
       pk.excludeCredentials?.length ?? 0,
+      descriptorTransportsList(pk.excludeCredentials),
       optionalString(pk.authenticatorSelection?.residentKey),
       optionalString(pk.authenticatorSelection?.userVerification),
       pk.authenticatorSelection !== undefined,
@@ -261,6 +284,7 @@ export function lastGetSnapshot() {
       optionalNumber(pk.timeout),
       optionalString(pk.userVerification),
       pk.allowCredentials?.length ?? 0,
+      descriptorTransportsList(pk.allowCredentials),
     ),
   );
 }

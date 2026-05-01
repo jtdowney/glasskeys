@@ -32,13 +32,35 @@ fn credential_id_generator() -> qcheck.Generator(glasslock.CredentialId) {
   qcheck.byte_aligned_bit_array() |> qcheck.map(glasslock.CredentialId)
 }
 
+fn transport_generator() -> qcheck.Generator(glasslock.Transport) {
+  qcheck.from_generators(qcheck.return(glasslock.TransportUsb), [
+    qcheck.return(glasslock.TransportNfc),
+    qcheck.return(glasslock.TransportBle),
+    qcheck.return(glasslock.TransportSmartCard),
+    qcheck.return(glasslock.TransportHybrid),
+    qcheck.return(glasslock.TransportInternal),
+  ])
+}
+
+fn credential_descriptor_generator() -> qcheck.Generator(
+  glasslock.CredentialDescriptor,
+) {
+  qcheck.map2(
+    credential_id_generator(),
+    qcheck.list_from(transport_generator()),
+    fn(id, transports) { glasslock.CredentialDescriptor(id:, transports:) },
+  )
+}
+
 type AuthSetup {
   AuthSetup(
     stored_sign_count: Int,
     user_verification: glasslock.UserVerification,
     allow_cross_origin: Bool,
     allowed_top_origins: List(String),
-    allow_credentials_override: option.Option(List(glasslock.CredentialId)),
+    allow_credentials_override: option.Option(
+      List(glasslock.CredentialDescriptor),
+    ),
     generate_keypair: fn() -> testing.KeyPair,
   )
 }
@@ -72,10 +94,16 @@ fn setup_authentication_with(
       id: glasslock.CredentialId(credential_id),
       public_key: testing.public_key(keypair),
       sign_count: config.stored_sign_count,
+      transports: [],
     )
   let allow_credentials = case config.allow_credentials_override {
-    option.None -> [glasslock.CredentialId(credential_id)]
-    option.Some(ids) -> ids
+    option.None -> [
+      glasslock.CredentialDescriptor(
+        id: stored_credential.id,
+        transports: stored_credential.transports,
+      ),
+    ]
+    option.Some(descriptors) -> descriptors
   }
   let assert Ok(#(_, challenge)) =
     authentication.request(
@@ -239,25 +267,36 @@ pub fn request_with_allow_credentials_test() {
       options: authentication.Options(
         ..authentication.default_options(),
         allow_credentials: [
-          glasslock.CredentialId(cred1),
-          glasslock.CredentialId(cred2),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(cred1),
+            transports: [],
+          ),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(cred2),
+            transports: [glasslock.TransportUsb, glasslock.TransportNfc],
+          ),
         ],
       ),
     )
 
-  let id_decoder = {
+  let entry_decoder = {
     use id <- decode.field("id", decode.string)
-    decode.success(id)
+    use transports <- decode.optional_field(
+      "transports",
+      [],
+      decode.list(decode.string),
+    )
+    decode.success(#(id, transports))
   }
   let decoder = {
-    use ids <- decode.field("allowCredentials", decode.list(id_decoder))
-    decode.success(ids)
+    use entries <- decode.field("allowCredentials", decode.list(entry_decoder))
+    decode.success(entries)
   }
-  let assert Ok(ids) = json.parse(json.to_string(options_json), decoder)
-  assert ids
+  let assert Ok(entries) = json.parse(json.to_string(options_json), decoder)
+  assert entries
     == [
-      bit_array.base64_url_encode(cred1, False),
-      bit_array.base64_url_encode(cred2, False),
+      #(bit_array.base64_url_encode(cred1, False), []),
+      #(bit_array.base64_url_encode(cred2, False), ["usb", "nfc"]),
     ]
 }
 
@@ -439,12 +478,16 @@ pub fn verify_rejects_origin_mismatch_test() {
 }
 
 pub fn verify_rejects_credential_not_allowed_test() {
-  let other_credential_id = glasslock.CredentialId(crypto.random_bytes(16))
+  let other_descriptor =
+    glasslock.CredentialDescriptor(
+      id: glasslock.CredentialId(crypto.random_bytes(16)),
+      transports: [],
+    )
   let #(challenge, stored_credential, keypair) =
     setup_authentication_with(
       AuthSetup(
         ..default_auth_setup(),
-        allow_credentials_override: option.Some([other_credential_id]),
+        allow_credentials_override: option.Some([other_descriptor]),
       ),
     )
 
@@ -1070,6 +1113,7 @@ pub fn sign_count_monotonicity_test() {
       id: glasslock.CredentialId(credential_id),
       public_key: public_key,
       sign_count: stored,
+      transports: [],
     )
 
   let assert Ok(#(_, challenge)) =
@@ -1078,7 +1122,12 @@ pub fn sign_count_monotonicity_test() {
       origins: ["https://example.com"],
       options: authentication.Options(
         ..authentication.default_options(),
-        allow_credentials: [glasslock.CredentialId(credential_id)],
+        allow_credentials: [
+          glasslock.CredentialDescriptor(
+            id: stored_cred.id,
+            transports: stored_cred.transports,
+          ),
+        ],
       ),
     )
   let response =
@@ -1117,7 +1166,7 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
   use inputs <- qcheck.given(qcheck.tuple6(
     qcheck.non_empty_string(),
     non_empty_list_from(qcheck.non_empty_string()),
-    qcheck.list_from(credential_id_generator()),
+    qcheck.list_from(credential_descriptor_generator()),
     qcheck.list_from(qcheck.non_empty_string()),
     qcheck.bool(),
     user_verification_generator(),
@@ -1165,8 +1214,16 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
 }
 
 pub fn decoded_challenge_drives_verify_test() {
-  let cred_a = glasslock.CredentialId(<<1, 2, 3, 4>>)
-  let cred_b = glasslock.CredentialId(<<5, 6, 7, 8>>)
+  let cred_a =
+    glasslock.CredentialDescriptor(
+      id: glasslock.CredentialId(<<1, 2, 3, 4>>),
+      transports: [],
+    )
+  let cred_b =
+    glasslock.CredentialDescriptor(
+      id: glasslock.CredentialId(<<5, 6, 7, 8>>),
+      transports: [glasslock.TransportInternal],
+    )
   let assert Ok(#(_, challenge)) =
     authentication.request(
       relying_party_id: "example.com",
@@ -1185,9 +1242,10 @@ pub fn decoded_challenge_drives_verify_test() {
   let keypair = testing.generate_es256_keypair()
   let stored_credential =
     glasslock.Credential(
-      id: cred_a,
+      id: cred_a.id,
       public_key: testing.public_key(keypair),
       sign_count: 0,
+      transports: cred_a.transports,
     )
   let response =
     testing.build_authentication_response(
@@ -1281,8 +1339,14 @@ pub fn request_emits_compat_json_test() {
         user_verification: option.None,
         allow_cross_origin: False,
         allow_credentials: [
-          glasslock.CredentialId(<<30, 31, 32, 33>>),
-          glasslock.CredentialId(<<40, 41, 42>>),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(<<30, 31, 32, 33>>),
+            transports: [],
+          ),
+          glasslock.CredentialDescriptor(
+            id: glasslock.CredentialId(<<40, 41, 42>>),
+            transports: [glasslock.TransportHybrid, glasslock.TransportInternal],
+          ),
         ],
         allowed_top_origins: [],
       ),

@@ -116,7 +116,12 @@ fn register_then_authenticate(
       origins: ["https://example.com"],
       options: authentication.Options(
         ..authentication.default_options(),
-        allow_credentials: [credential.id],
+        allow_credentials: [
+          glasslock.CredentialDescriptor(
+            id: credential.id,
+            transports: credential.transports,
+          ),
+        ],
       ),
     )
   let auth_response =
@@ -173,7 +178,12 @@ fn register_then_authenticate_with_glasskey_shape(
       origins: ["https://example.com"],
       options: authentication.Options(
         ..authentication.default_options(),
-        allow_credentials: [credential.id],
+        allow_credentials: [
+          glasslock.CredentialDescriptor(
+            id: credential.id,
+            transports: credential.transports,
+          ),
+        ],
       ),
     )
   let auth_response =
