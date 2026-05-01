@@ -68,10 +68,19 @@ pub type AuthenticationCredential {
 /// Parsed authentication ceremony options from the server.
 pub type AuthenticationOptions {
   AuthenticationOptions(
+    /// Raw challenge bytes.
     challenge: BitArray,
+    /// Relying party identifier (effective domain). `None` lets the browser
+    /// fall back to the calling document's origin.
     rp_id: Option(String),
+    /// Ceremony timeout in milliseconds. `None` lets the browser apply its
+    /// default.
     timeout: Option(Int),
+    /// User verification requirement. `None` lets the browser apply the spec
+    /// default of `preferred`.
     user_verification: Option(Requirement),
+    /// Credentials the user may authenticate with. An empty list selects
+    /// the discoverable (passkey) flow.
     allow_credentials: List(CredentialDescriptor),
   )
 }
@@ -171,17 +180,34 @@ pub type RegistrationCredential {
 /// Parsed registration ceremony options from the server.
 pub type RegistrationOptions {
   RegistrationOptions(
+    /// Raw challenge bytes.
     challenge: BitArray,
+    /// Relying party identifier (effective domain).
     rp_id: String,
+    /// Human-readable relying party name shown to the user.
     rp_name: String,
+    /// Opaque user handle as raw bytes.
     user_id: BitArray,
+    /// Username shown in the browser's account chooser.
     user_name: String,
+    /// Human-readable display name shown to the user.
     user_display_name: String,
+    /// Accepted signing algorithms in preference order. The authenticator
+    /// picks the first it supports.
     algorithms: List(Algorithm),
+    /// Ceremony timeout in milliseconds. `None` lets the browser apply its
+    /// default.
     timeout: Option(Int),
+    /// Discoverable credential requirement. `None` lets the browser apply
+    /// the spec default of `discouraged`.
     resident_key: Option(Requirement),
+    /// User verification requirement. `None` lets the browser apply the spec
+    /// default of `preferred`.
     user_verification: Option(Requirement),
+    /// Restrict the authenticator class. `None` allows any.
     authenticator_attachment: Option(AuthenticatorAttachment),
+    /// Credentials to exclude (prevent re-registration of an existing
+    /// authenticator).
     exclude_credentials: List(CredentialDescriptor),
   )
 }
@@ -238,7 +264,9 @@ type User {
 ///
 /// Takes options parsed with [`authentication_options_decoder`](#authentication_options_decoder),
 /// then calls `navigator.credentials.get`. Returns a promise resolving to the
-/// assertion response JSON on success.
+/// assertion response JSON on success. The returned string is the exact shape
+/// glasslock's `authentication.verify` expects. Pass it through unchanged
+/// rather than decoding and re-encoding.
 pub fn start_authentication(
   options: AuthenticationOptions,
 ) -> Promise(Result(String, Error)) {
@@ -573,7 +601,9 @@ fn requirement_decoder() -> decode.Decoder(Requirement) {
 ///
 /// Takes options parsed with [`registration_options_decoder`](#registration_options_decoder),
 /// then calls `navigator.credentials.create`. Returns a promise resolving to
-/// the credential response JSON on success.
+/// the credential response JSON on success. The returned string is the exact
+/// shape glasslock's `registration.verify` expects. Pass it through unchanged
+/// rather than decoding and re-encoding.
 pub fn start_registration(
   options: RegistrationOptions,
 ) -> Promise(Result(String, Error)) {

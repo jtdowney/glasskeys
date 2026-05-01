@@ -252,7 +252,9 @@ fn parse_allow_credentials(
   })
 }
 
-/// Returns an `Options` record with default values.
+/// Returns an `Options` record with default values. With the empty
+/// `allow_credentials` default, this configures the discoverable (passkey)
+/// flow where the authenticator selects a credential.
 pub fn default_options() -> Options {
   Options(
     timeout: duration.minutes(1),

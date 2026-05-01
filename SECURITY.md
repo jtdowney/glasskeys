@@ -47,7 +47,7 @@ After each authentication, glasslock compares the authenticator's reported sign 
 
 ### glasslock
 
-On Erlang/OTP, use a currently supported OTP version with up-to-date OpenSSL/LibreSSL. On Node.js, use a currently supported LTS version. glasslock delegates cryptography to kryptos, which wraps `:crypto` on Erlang and `node:crypto` on Node.js.
+On Erlang/OTP, use OTP 27 or newer with up-to-date OpenSSL/LibreSSL. On Node.js, use a currently supported LTS version. glasslock delegates cryptography to kryptos, which wraps `:crypto` on Erlang and `node:crypto` on Node.js.
 
 ### glasskey
 
