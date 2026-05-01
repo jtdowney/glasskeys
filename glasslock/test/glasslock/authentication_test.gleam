@@ -1,6 +1,7 @@
 import birdie
 import glasslock
 import glasslock/authentication
+import glasslock/internal/cbor
 import glasslock/registration
 import glasslock/testing
 import gleam/bit_array
@@ -574,6 +575,43 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
     == Error(authentication.VerificationMismatch(glasslock.CredentialIdField))
 }
 
+pub fn verify_rejects_unsupported_stored_public_key_test() {
+  let #(challenge, stored_credential, keypair) = setup_authentication()
+
+  let response =
+    testing.build_authentication_response(challenge:, keypair:, sign_count: 1)
+  let response_json =
+    testing.to_authentication_json(
+      response,
+      credential_id: stored_credential.id,
+      user_handle: option.None,
+    )
+
+  let unsupported_key_cbor =
+    cbor.encode(
+      cbor.Map([
+        #(cbor.Int(1), cbor.Int(4)),
+        #(cbor.Int(-1), cbor.Bytes(<<0:256>>)),
+      ]),
+    )
+  let stored_with_unsupported_key =
+    glasslock.Credential(
+      ..stored_credential,
+      public_key: glasslock.PublicKey(unsupported_key_cbor),
+    )
+
+  let result =
+    authentication.verify(
+      response_json:,
+      challenge:,
+      stored: stored_with_unsupported_key,
+    )
+  assert result
+    == Error(authentication.UnsupportedKey(
+      "COSE key missing algorithm (label 3)",
+    ))
+}
+
 pub fn verify_rejects_invalid_signature_test() {
   let #(challenge, stored_credential, keypair) = setup_authentication()
 
@@ -1093,6 +1131,32 @@ pub fn parse_response_errors_on_invalid_user_handle_base64_test() {
 pub fn parse_response_rejects_invalid_json_test() {
   assert authentication.parse_response("{bad")
     == Error(authentication.ParseError("Invalid authentication response JSON"))
+}
+
+pub fn parse_response_rejects_id_raw_id_mismatch_test() {
+  let raw_id_b64 =
+    bit_array.base64_url_encode(<<1, 2, 3, 4, 5, 6, 7, 8>>, False)
+  let mismatched_id_b64 =
+    bit_array.base64_url_encode(<<99, 99, 99, 99, 99, 99, 99, 99>>, False)
+  let response_json =
+    json.object([
+      #("id", json.string(mismatched_id_b64)),
+      #("rawId", json.string(raw_id_b64)),
+      #("type", json.string("public-key")),
+      #(
+        "response",
+        json.object([
+          #("clientDataJSON", json.string("dGVzdA")),
+          #("authenticatorData", json.string("dGVzdA")),
+          #("signature", json.string("dGVzdA")),
+        ]),
+      ),
+      #("clientExtensionResults", json.object([])),
+    ])
+    |> json.to_string
+
+  assert authentication.parse_response(response_json)
+    == Error(authentication.VerificationMismatch(glasslock.CredentialIdField))
 }
 
 pub fn sign_count_monotonicity_test() {

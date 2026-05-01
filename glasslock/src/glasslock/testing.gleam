@@ -361,9 +361,18 @@ pub fn sign(keypair keypair: KeyPair, message message: BitArray) -> BitArray {
 ///
 /// This is the only attestation format currently supported by glasslock.
 pub fn build_attestation_object(auth_data: BitArray) -> BitArray {
+  build_attestation_object_with_fmt(fmt: "none", auth_data:)
+}
+
+/// Build an attestation object with a caller-supplied attestation format
+/// and an empty `attStmt`. Use to exercise unsupported-format rejection paths.
+pub fn build_attestation_object_with_fmt(
+  fmt fmt: String,
+  auth_data auth_data: BitArray,
+) -> BitArray {
   cbor.encode(
     cbor.Map([
-      #(cbor.String("fmt"), cbor.String("none")),
+      #(cbor.String("fmt"), cbor.String(fmt)),
       #(cbor.String("authData"), cbor.Bytes(auth_data)),
       #(cbor.String("attStmt"), cbor.Map([])),
     ]),

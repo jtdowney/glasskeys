@@ -783,6 +783,57 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
     == Error(registration.VerificationMismatch(glasslock.CredentialIdField))
 }
 
+pub fn verify_rejects_unsupported_attestation_format_test() {
+  let challenge = setup_challenge()
+  let keypair = testing.generate_es256_keypair()
+  let credential_id = glasslock.CredentialId(<<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>)
+  let auth_data =
+    testing.build_registration_authenticator_data(
+      relying_party_id: testing.registration_challenge_rp_id(challenge),
+      credential_id:,
+      cose_key: testing.cose_key(keypair),
+      flags: testing.default_flags(),
+      sign_count: 0,
+    )
+  let client_data_json =
+    testing.build_client_data_create(
+      challenge: testing.registration_challenge_bytes(challenge),
+      origin: "https://example.com",
+      cross_origin: False,
+    )
+  let response_json =
+    testing.to_registration_json_with(
+      credential_id:,
+      client_data_json:,
+      attestation_object: testing.build_attestation_object_with_fmt(
+        fmt: "fido-u2f",
+        auth_data:,
+      ),
+      credential_type: "public-key",
+      transports: [],
+    )
+
+  let result = registration.verify(response_json:, challenge:)
+  assert result
+    == Error(registration.InvalidAttestation("unsupported format: fido-u2f"))
+}
+
+pub fn verify_rejects_credential_algorithm_not_requested_test() {
+  let options =
+    registration.Options(..registration.default_options(), algorithms: [
+      registration.Ed25519,
+    ])
+  let #(_, challenge) = make_request(options)
+  let response = testing.build_registration_response(challenge:)
+  let response_json = testing.to_registration_json(response)
+
+  let result = registration.verify(response_json:, challenge:)
+  assert result
+    == Error(registration.UnsupportedKey(
+      "credential algorithm does not match requested algorithms",
+    ))
+}
+
 pub fn encode_decode_roundtrip_preserves_challenge_test() {
   use inputs <- qcheck.given(qcheck.tuple6(
     qcheck.non_empty_string(),
