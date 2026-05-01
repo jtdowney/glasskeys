@@ -150,7 +150,7 @@ pub type Error {
   NotAllowed
   /// The operation was aborted.
   Aborted
-  /// The relying party ID is invalid for this origin.
+  /// Security policy violation (e.g., non-HTTPS origin or invalid relying party ID for this origin).
   SecurityError
   /// An unexpected error from the browser API.
   UnknownError(String)
