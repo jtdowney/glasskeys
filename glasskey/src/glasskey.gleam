@@ -224,9 +224,9 @@ pub type Requirement {
 
 type AuthenticatorSelection {
   AuthenticatorSelection(
-    resident_key: Option(String),
-    user_verification: Option(String),
-    authenticator_attachment: Option(String),
+    resident_key: Option(Requirement),
+    user_verification: Option(Requirement),
+    authenticator_attachment: Option(AuthenticatorAttachment),
   )
 }
 
@@ -247,7 +247,7 @@ type GetOptions {
     challenge: BitArray,
     rp_id: Option(String),
     timeout: Option(Int),
-    user_verification: Option(String),
+    user_verification: Option(Requirement),
     allow_credentials: array.Array(CredentialDescriptor),
   )
 }
@@ -325,10 +325,7 @@ fn to_get_options(options: AuthenticationOptions) -> GetOptions {
     challenge: options.challenge,
     rp_id: options.rp_id,
     timeout: options.timeout,
-    user_verification: option.map(
-      options.user_verification,
-      requirement_to_string,
-    ),
+    user_verification: options.user_verification,
     allow_credentials: array.from_list(options.allow_credentials),
   )
 }
@@ -347,8 +344,7 @@ pub fn supports_webauthn() -> Bool
 @external(javascript, "./glasskey_ffi.mjs", "isConditionalMediationAvailable")
 pub fn supports_webauthn_autofill() -> Promise(Bool)
 
-@internal
-pub fn encode_authentication_response(
+fn encode_authentication_response(
   credential: AuthenticationCredential,
 ) -> String {
   let base_fields = [
@@ -370,10 +366,7 @@ pub fn encode_authentication_response(
   |> json.to_string
 }
 
-@internal
-pub fn encode_registration_response(
-  credential: RegistrationCredential,
-) -> String {
+fn encode_registration_response(credential: RegistrationCredential) -> String {
   let response_fields = [
     #("clientDataJSON", b64_json(credential.client_data_json)),
     #("attestationObject", b64_json(credential.attestation_object)),
@@ -530,7 +523,7 @@ fn authenticator_attachment_decoder() -> decode.Decoder(AuthenticatorAttachment)
     case s {
       "platform" -> decode.success(Platform)
       "cross-platform" -> decode.success(CrossPlatform)
-      _ -> decode.failure(Platform, "authenticatorAttachment")
+      _ -> decode.failure(CrossPlatform, "authenticatorAttachment")
     }
   })
 }
@@ -592,7 +585,7 @@ fn requirement_decoder() -> decode.Decoder(Requirement) {
       "required" -> decode.success(Required)
       "preferred" -> decode.success(Preferred)
       "discouraged" -> decode.success(Discouraged)
-      _ -> decode.failure(Required, "requirement")
+      _ -> decode.failure(Preferred, "requirement")
     }
   })
 }
@@ -617,21 +610,13 @@ pub fn start_registration(
 }
 
 fn to_create_options(options: RegistrationOptions) -> CreateOptions {
-  let resident_key = option.map(options.resident_key, requirement_to_string)
-  let user_verification =
-    option.map(options.user_verification, requirement_to_string)
-  let authenticator_attachment =
-    option.map(
-      options.authenticator_attachment,
-      authenticator_attachment_to_string,
-    )
   let authenticator_selection = case
-    resident_key,
-    user_verification,
-    authenticator_attachment
+    options.resident_key,
+    options.user_verification,
+    options.authenticator_attachment
   {
     option.None, option.None, option.None -> option.None
-    _, _, _ ->
+    resident_key, user_verification, authenticator_attachment ->
       option.Some(AuthenticatorSelection(
         resident_key:,
         user_verification:,
@@ -670,7 +655,8 @@ fn algorithm_to_cose(algorithm: Algorithm) -> Int {
   }
 }
 
-fn authenticator_attachment_to_string(
+@internal
+pub fn authenticator_attachment_to_string(
   attachment: AuthenticatorAttachment,
 ) -> String {
   case attachment {
@@ -679,7 +665,8 @@ fn authenticator_attachment_to_string(
   }
 }
 
-fn requirement_to_string(requirement: Requirement) -> String {
+@internal
+pub fn requirement_to_string(requirement: Requirement) -> String {
   case requirement {
     Required -> "required"
     Preferred -> "preferred"

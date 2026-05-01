@@ -16,8 +16,8 @@ import {
 } from "./support/helpers.mjs";
 
 class FakeDOMException extends Error {
-  constructor(message, name) {
-    super(message);
+  constructor(message, name, options) {
+    super(message, options);
     this.name = name;
   }
 }
@@ -129,6 +129,23 @@ export function installFakeNavigatorMinimal() {
   setGlobal("navigator", { credentials: makeFakeCredentials() });
 }
 
+export function installFakeNavigatorWithoutCredentials() {
+  uninstallFakeNavigator();
+  originalState = {
+    window: snapshotGlobal("window"),
+    navigator: snapshotGlobal("navigator"),
+    PublicKeyCredential: snapshotGlobal("PublicKeyCredential"),
+    DOMException: snapshotGlobal("DOMException"),
+  };
+
+  class FakePublicKeyCredential {}
+
+  setGlobal("window", { PublicKeyCredential: FakePublicKeyCredential });
+  setGlobal("PublicKeyCredential", FakePublicKeyCredential);
+  setGlobal("DOMException", FakeDOMException);
+  setGlobal("navigator", {});
+}
+
 export function uninstallFakeNavigator() {
   if (originalState === null) return;
   restoreGlobal("window", originalState.window);
@@ -184,6 +201,13 @@ export function setCreateDomException(name, message) {
 
 export function setCreatePlainError(message) {
   createBehavior = { kind: "throw", error: new Error(message) };
+}
+
+export function setCreatePlainErrorWithCause(message, cause) {
+  createBehavior = {
+    kind: "throw",
+    error: new Error(message, { cause: new Error(cause) }),
+  };
 }
 
 export function setGetCredential(

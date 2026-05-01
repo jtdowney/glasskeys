@@ -31,6 +31,9 @@ pub fn install_default_fake_navigator() -> Nil
 @external(javascript, "../glasskey_test_ffi.mjs", "installFakeNavigatorMinimal")
 pub fn install_minimal_fake_navigator() -> Nil
 
+@external(javascript, "../glasskey_test_ffi.mjs", "installFakeNavigatorWithoutCredentials")
+pub fn install_fake_navigator_without_credentials() -> Nil
+
 @external(javascript, "../glasskey_test_ffi.mjs", "uninstallFakeNavigator")
 pub fn uninstall_fake_navigator() -> Nil
 
@@ -60,6 +63,12 @@ pub fn set_create_dom_exception(
 
 @external(javascript, "../glasskey_test_ffi.mjs", "setCreatePlainError")
 pub fn set_create_plain_error(message: String) -> Nil
+
+@external(javascript, "../glasskey_test_ffi.mjs", "setCreatePlainErrorWithCause")
+pub fn set_create_plain_error_with_cause(
+  message message: String,
+  cause cause: String,
+) -> Nil
 
 @external(javascript, "../glasskey_test_ffi.mjs", "setGetCredential")
 pub fn set_get_credential(

@@ -791,155 +791,6 @@ pub fn decode_authentication_options_malformed_challenge_test() {
     decode.run(dyn, glasskey.authentication_options_decoder())
 }
 
-pub fn encode_registration_response_test() {
-  let result =
-    glasskey.encode_registration_response(
-      glasskey.RegistrationCredential(
-        id: "cred-123",
-        raw_id: <<1, 2, 3>>,
-        client_data_json: <<"{}":utf8>>,
-        attestation_object: <<7, 8, 9>>,
-        transports: ["usb", "nfc"],
-      ),
-    )
-
-  let decoder = {
-    use id <- decode.field("id", decode.string)
-    use raw_id <- decode.field("rawId", decode.string)
-    use credential_type <- decode.field("type", decode.string)
-    use client_data_json <- decode.subfield(
-      ["response", "clientDataJSON"],
-      decode.string,
-    )
-    use attestation_object <- decode.subfield(
-      ["response", "attestationObject"],
-      decode.string,
-    )
-    use transports <- decode.subfield(
-      ["response", "transports"],
-      decode.list(decode.string),
-    )
-    decode.success(#(
-      id,
-      raw_id,
-      credential_type,
-      client_data_json,
-      attestation_object,
-      transports,
-    ))
-  }
-
-  let assert Ok(#(id, raw_id, credential_type, cdj, ao, transports)) =
-    json.parse(result, decoder)
-
-  assert id == "cred-123"
-  assert raw_id == "AQID"
-  assert credential_type == "public-key"
-  assert cdj == "e30"
-  assert ao == "BwgJ"
-  assert transports == ["usb", "nfc"]
-}
-
-pub fn encode_registration_response_omits_transports_when_empty_test() {
-  let result =
-    glasskey.encode_registration_response(
-      glasskey.RegistrationCredential(
-        id: "cred-123",
-        raw_id: <<1, 2, 3>>,
-        client_data_json: <<"{}":utf8>>,
-        attestation_object: <<7, 8, 9>>,
-        transports: [],
-      ),
-    )
-
-  let decoder = {
-    use transports <- decode.then(decode.optionally_at(
-      ["response", "transports"],
-      option.None,
-      decode.optional(decode.list(decode.string)),
-    ))
-    decode.success(transports)
-  }
-
-  let assert Ok(transports) = json.parse(result, decoder)
-  assert transports == option.None
-}
-
-pub fn encode_authentication_response_with_user_handle_test() {
-  let result =
-    glasskey.encode_authentication_response(glasskey.AuthenticationCredential(
-      id: "cred-abc",
-      raw_id: <<10, 20, 30>>,
-      client_data_json: <<"{}":utf8>>,
-      authenticator_data: <<70, 80, 90>>,
-      signature: <<100, 110, 120>>,
-      user_handle: option.Some(<<1, 2>>),
-    ))
-
-  let decoder = {
-    use id <- decode.field("id", decode.string)
-    use raw_id <- decode.field("rawId", decode.string)
-    use credential_type <- decode.field("type", decode.string)
-    use client_data_json <- decode.subfield(
-      ["response", "clientDataJSON"],
-      decode.string,
-    )
-    use authenticator_data <- decode.subfield(
-      ["response", "authenticatorData"],
-      decode.string,
-    )
-    use signature <- decode.subfield(["response", "signature"], decode.string)
-    use user_handle <- decode.subfield(
-      ["response", "userHandle"],
-      decode.optional(decode.string),
-    )
-    decode.success(#(
-      id,
-      raw_id,
-      credential_type,
-      client_data_json,
-      authenticator_data,
-      signature,
-      user_handle,
-    ))
-  }
-
-  let assert Ok(#(id, raw_id, credential_type, cdj, ad, sig, uh)) =
-    json.parse(result, decoder)
-
-  assert id == "cred-abc"
-  assert raw_id == "ChQe"
-  assert credential_type == "public-key"
-  assert cdj == "e30"
-  assert ad == "RlBa"
-  assert sig == "ZG54"
-  assert uh == option.Some("AQI")
-}
-
-pub fn encode_authentication_response_omits_user_handle_when_missing_test() {
-  let result =
-    glasskey.encode_authentication_response(glasskey.AuthenticationCredential(
-      id: "cred-x",
-      raw_id: <<1>>,
-      client_data_json: <<"{}":utf8>>,
-      authenticator_data: <<3>>,
-      signature: <<4>>,
-      user_handle: option.None,
-    ))
-
-  let decoder = {
-    use user_handle <- decode.then(decode.optionally_at(
-      ["response", "userHandle"],
-      option.None,
-      decode.optional(decode.string),
-    ))
-    decode.success(user_handle)
-  }
-
-  let assert Ok(user_handle) = json.parse(result, decoder)
-  assert user_handle == option.None
-}
-
 pub fn decode_registration_options_roundtrip_test() {
   use inputs <- qcheck.given(qcheck.tuple4(
     qcheck.byte_aligned_bit_array(),
@@ -975,6 +826,13 @@ pub fn supports_webauthn_returns_true_with_fake_navigator_test() {
   let result = glasskey.supports_webauthn()
   helpers.uninstall_fake_navigator()
   assert result
+}
+
+pub fn supports_webauthn_returns_false_when_navigator_credentials_missing_test() {
+  helpers.install_fake_navigator_without_credentials()
+  let result = glasskey.supports_webauthn()
+  helpers.uninstall_fake_navigator()
+  assert !result
 }
 
 pub fn platform_authenticator_available_returns_false_without_globals_test() {
@@ -1218,6 +1076,22 @@ pub fn start_registration_plain_error_becomes_unknown_error_test() {
   )
 
   assert result == Error(glasskey.UnknownError("network down"))
+  promise.resolve(Nil)
+}
+
+pub fn start_registration_plain_error_includes_cause_test() {
+  use <- with_fake_navigator
+  helpers.set_create_plain_error_with_cause(
+    message: "outer failure",
+    cause: "inner detail",
+  )
+
+  use result <- promise.await(
+    glasskey.start_registration(default_registration_options()),
+  )
+
+  assert result
+    == Error(glasskey.UnknownError("outer failure (cause: inner detail)"))
   promise.resolve(Nil)
 }
 

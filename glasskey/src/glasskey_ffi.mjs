@@ -10,7 +10,9 @@ import {
   Error$NotSupported,
   Error$UnknownError,
   RegistrationCredential$RegistrationCredential,
+  authenticator_attachment_to_string as authenticatorAttachmentToString,
   classify_dom_exception as classifyDomException,
+  requirement_to_string as requirementToString,
   transport_to_string as transportToString,
 } from "./glasskey.mjs";
 import {
@@ -23,7 +25,9 @@ import {
 export function browserSupportsWebauthn() {
   return (
     typeof window !== "undefined" &&
-    typeof window.PublicKeyCredential !== "undefined"
+    typeof window.PublicKeyCredential !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    navigator.credentials != null
   );
 }
 
@@ -78,7 +82,9 @@ function buildPublicKey(options) {
   };
 
   if (Option$isSome(options.user_verification)) {
-    publicKey.userVerification = Option$Some$0(options.user_verification);
+    publicKey.userVerification = requirementToString(
+      Option$Some$0(options.user_verification),
+    );
   }
 
   if (Option$isSome(options.rp_id)) {
@@ -152,14 +158,23 @@ function toBitArray(buffer) {
 
 function classifyJsError(error) {
   if (error instanceof DOMException) {
-    return classifyDomException(error.name, error.message);
+    return classifyDomException(error.name, describeError(error));
   }
 
   if (error instanceof Error) {
-    return Error$UnknownError(error.message);
+    return Error$UnknownError(describeError(error));
   }
 
   return Error$UnknownError(String(error));
+}
+
+function describeError(error) {
+  if (error.cause === undefined || error.cause === null) {
+    return error.message;
+  }
+  const cause =
+    error.cause instanceof Error ? error.cause.message : String(error.cause);
+  return error.message + " (cause: " + cause + ")";
 }
 
 function buildRegistrationCredential(credential) {
@@ -202,15 +217,19 @@ function buildAuthenticatorSelection(selection) {
   const inner = Option$Some$0(selection);
   const out = {};
   if (Option$isSome(inner.resident_key)) {
-    out.residentKey = Option$Some$0(inner.resident_key);
+    out.residentKey = requirementToString(Option$Some$0(inner.resident_key));
   }
 
   if (Option$isSome(inner.user_verification)) {
-    out.userVerification = Option$Some$0(inner.user_verification);
+    out.userVerification = requirementToString(
+      Option$Some$0(inner.user_verification),
+    );
   }
 
   if (Option$isSome(inner.authenticator_attachment)) {
-    out.authenticatorAttachment = Option$Some$0(inner.authenticator_attachment);
+    out.authenticatorAttachment = authenticatorAttachmentToString(
+      Option$Some$0(inner.authenticator_attachment),
+    );
   }
 
   return out;
