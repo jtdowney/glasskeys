@@ -21,13 +21,13 @@ gleam add glasslock
 import glasslock/registration
 
 // 1. Generate options to send to the browser
-let assert Ok(#(options_json, challenge)) =
-  registration.request(
+let #(options_json, challenge) =
+  registration.new(
     relying_party: registration.RelyingParty(id: "example.com", name: "My App"),
     user: registration.User(id: user_id, name: username, display_name: username),
-    origins: ["https://example.com"],
-    options: registration.default_options(),
+    origin: "https://example.com",
   )
+  |> registration.build()
 // Send options_json to the browser. On a single node, keep `challenge`
 // in memory (e.g. an actor keyed by session id). For multi-node or
 // signed-cookie storage, serialize with `registration.encode_challenge`
@@ -49,13 +49,13 @@ case registration.verify(response_json:, challenge:) {
 import glasslock/authentication
 
 // 1. Generate options to send to the browser
-// (empty allow_credentials is the default — discoverable/passkey flow)
-let assert Ok(#(options_json, challenge)) =
-  authentication.request(
+// (no allow_credential calls = discoverable/passkey flow)
+let #(options_json, challenge) =
+  authentication.new(
     relying_party_id: "example.com",
-    origins: ["https://example.com"],
-    options: authentication.default_options(),
+    origin: "https://example.com",
   )
+  |> authentication.build()
 // Send options_json to the browser. On a single node, keep `challenge`
 // in memory (e.g. an actor keyed by session id). For multi-node or
 // signed-cookie storage, serialize with `authentication.encode_challenge`

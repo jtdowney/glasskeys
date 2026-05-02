@@ -30,8 +30,7 @@ pub fn build_client_data_get_sets_type_test() {
 pub fn build_registration_auth_data_roundtrips_test() {
   let keypair = testing.generate_es256_keypair()
   let cose_key = testing.cose_key(keypair)
-  let raw_credential_id = <<1, 2, 3, 4, 5, 6, 7, 8>>
-  let credential_id = glasslock.CredentialId(raw_credential_id)
+  let credential_id = <<1, 2, 3, 4, 5, 6, 7, 8>>
   let flags =
     testing.AuthenticatorFlags(user_present: True, user_verified: True)
 
@@ -48,7 +47,7 @@ pub fn build_registration_auth_data_roundtrips_test() {
   assert ad.user_present
   assert ad.user_verified
   assert ad.sign_count == 42
-  assert ad.attested_credential.credential_id == raw_credential_id
+  assert ad.attested_credential.credential_id == credential_id
 
   let assert Ok(expected_hash) =
     crypto.hash(hash.Sha256, bit_array.from_string("example.com"))

@@ -6,20 +6,16 @@
 //// import glasslock/authentication
 ////
 //// // Generate options for browser
-//// let assert Ok(#(request_json, challenge)) =
-////   authentication.request(
+//// let #(request_json, challenge) =
+////   authentication.new(
 ////     relying_party_id: "example.com",
-////     origins: ["https://example.com"],
-////     options: authentication.Options(
-////       ..authentication.default_options(),
-////       allow_credentials: [
-////         glasslock.CredentialDescriptor(
-////           id: stored_credential.id,
-////           transports: stored_credential.transports,
-////         ),
-////       ],
-////     ),
+////     origin: "https://example.com",
 ////   )
+////   |> authentication.allow_credential(
+////     id: stored_credential.id,
+////     transports: stored_credential.transports,
+////   )
+////   |> authentication.build()
 ////
 //// // Send request_json to browser, receive response_json back. Keep
 //// // `challenge` in memory for a single-node deploy; to span processes
@@ -36,13 +32,13 @@
 //// ## Example (discoverable/passkey)
 ////
 //// ```gleam
-//// // Empty allow_credentials is the default (discoverable flow)
-//// let assert Ok(#(request_json, challenge)) =
-////   authentication.request(
+//// // No allow_credential calls = discoverable flow
+//// let #(request_json, challenge) =
+////   authentication.new(
 ////     relying_party_id: "example.com",
-////     origins: ["https://example.com"],
-////     options: authentication.default_options(),
+////     origin: "https://example.com",
 ////   )
+////   |> authentication.build()
 ////
 //// // Parse response to get credential_id for lookup. As above, keep
 //// // `challenge` in memory for a single node, or round-trip through
@@ -76,37 +72,9 @@ import gleam/time/duration.{type Duration}
 import kryptos/crypto
 import kryptos/hash
 
-/// Optional knobs for authentication challenge generation.
-pub type Options {
-  Options(
-    /// Timeout for the ceremony. Defaults to 1 minute.
-    timeout: Duration,
-    /// User verification requirement. `None` omits the field from
-    /// the JSON sent to the browser; the browser applies the spec default
-    /// of `preferred`.
-    user_verification: Option(glasslock.UserVerification),
-    /// Whether to allow cross-origin requests. Defaults to `False`.
-    allow_cross_origin: Bool,
-    /// Credentials the user may authenticate with. Empty for discoverable flow.
-    /// Build each entry from a stored `glasslock.Credential` with
-    /// `glasslock.CredentialDescriptor(id:, transports:)` so transport hints
-    /// are preserved; pass an empty `transports` list if not stored.
-    allow_credentials: List(glasslock.CredentialDescriptor),
-    /// Allowed top-level origins for cross-origin iframe verification. The
-    /// allowlist is consulted only when the browser supplies a `topOrigin`
-    /// field; older browsers omit the field even for cross-origin requests,
-    /// in which case top-origin verification is skipped.
-    /// Defaults to `[]`.
-    allowed_top_origins: List(String),
-  )
-}
-
 /// Parsed credential lookup info from response (for discoverable flow).
 pub type ResponseInfo {
-  ResponseInfo(
-    credential_id: glasslock.CredentialId,
-    user_handle: Option(BitArray),
-  )
+  ResponseInfo(credential_id: BitArray, user_handle: Option(BitArray))
 }
 
 /// Errors that can occur during authentication verification.
@@ -130,11 +98,26 @@ pub type Error {
   UserVerificationFailed
 }
 
+/// Configuration for an authentication request, built up via `new` and the
+/// setter functions, then handed to `build` to produce browser options
+/// and a challenge verifier.
+pub opaque type Builder {
+  Builder(
+    relying_party_id: String,
+    origins: List(String),
+    timeout: Duration,
+    user_verification: Option(glasslock.UserVerification),
+    allow_cross_origin: Bool,
+    allow_credentials: List(#(BitArray, List(glasslock.Transport))),
+    allowed_top_origins: List(String),
+  )
+}
+
 /// A finalized authentication challenge ready for verification.
 pub opaque type Challenge {
   Challenge(
     data: internal.ChallengeData,
-    allowed_credentials: List(glasslock.CredentialDescriptor),
+    allowed_credentials: List(#(BitArray, List(glasslock.Transport))),
   )
 }
 
@@ -150,6 +133,80 @@ type ParsedResponse {
   )
 }
 
+/// Start a new authentication request builder with the required fields.
+///
+/// Defaults: 1-minute timeout, no allowed credentials (discoverable/passkey
+/// flow), cross-origin disallowed. Layer on optional configuration with the
+/// setter functions before calling `build`.
+pub fn new(
+  relying_party_id relying_party_id: String,
+  origin origin: String,
+) -> Builder {
+  Builder(
+    relying_party_id:,
+    origins: [origin],
+    timeout: duration.minutes(1),
+    user_verification: option.None,
+    allow_cross_origin: False,
+    allow_credentials: [],
+    allowed_top_origins: [],
+  )
+}
+
+/// Add an additional accepted origin. The origin passed to `new` is always
+/// included; this function appends further origins. The signed
+/// `clientDataJSON.origin` returned by the authenticator must match one of
+/// them.
+pub fn origin(builder: Builder, origin: String) -> Builder {
+  Builder(..builder, origins: [origin, ..builder.origins])
+}
+
+/// Set the ceremony timeout. Defaults to 1 minute.
+pub fn timeout(builder: Builder, timeout: Duration) -> Builder {
+  Builder(..builder, timeout:)
+}
+
+/// Set the user verification requirement. When unset the field is omitted
+/// from the JSON sent to the browser; the browser applies the spec default
+/// of `preferred`.
+pub fn user_verification(
+  builder: Builder,
+  user_verification: glasslock.UserVerification,
+) -> Builder {
+  Builder(..builder, user_verification: option.Some(user_verification))
+}
+
+/// Allow cross-origin requests. Defaults to disallowed.
+pub fn allow_cross_origin(builder: Builder, allow: Bool) -> Builder {
+  Builder(..builder, allow_cross_origin: allow)
+}
+
+/// Add a credential to the `allowCredentials` list. Pass the stored
+/// credential's `id` and `transports` so the browser can route the request.
+/// With no calls the request is a discoverable (passkey) flow where the
+/// authenticator selects a credential.
+pub fn allow_credential(
+  builder: Builder,
+  id id: BitArray,
+  transports transports: List(glasslock.Transport),
+) -> Builder {
+  Builder(..builder, allow_credentials: [
+    #(id, transports),
+    ..builder.allow_credentials
+  ])
+}
+
+/// Add a top-level origin to the cross-origin iframe allowlist. The
+/// allowlist is consulted only when the browser supplies a `topOrigin`
+/// field; older browsers omit the field even for cross-origin requests,
+/// in which case top-origin verification is skipped.
+pub fn allowed_top_origin(builder: Builder, origin: String) -> Builder {
+  Builder(..builder, allowed_top_origins: [
+    origin,
+    ..builder.allowed_top_origins
+  ])
+}
+
 /// Serialize an authentication challenge for out-of-process storage between
 /// the `request` and `verify` steps (signed cookie, Redis, database row).
 /// Pair with `parse_challenge` to rehydrate.
@@ -163,9 +220,8 @@ type ParsedResponse {
 /// security is a common fit.
 pub fn encode_challenge(challenge: Challenge) -> String {
   let allow_credentials =
-    json.array(challenge.allowed_credentials, fn(descriptor) {
-      let glasslock.CredentialDescriptor(id:, transports:) = descriptor
-      let glasslock.CredentialId(raw) = id
+    json.array(challenge.allowed_credentials, fn(entry) {
+      let #(raw, transports) = entry
       json.object([
         #("id", json.string(bit_array.base64_url_encode(raw, False))),
         #(
@@ -195,7 +251,7 @@ pub fn challenge_data(challenge: Challenge) -> internal.ChallengeData {
 @internal
 pub fn challenge_allowed_credentials(
   challenge: Challenge,
-) -> List(glasslock.CredentialDescriptor) {
+) -> List(#(BitArray, List(glasslock.Transport))) {
   challenge.allowed_credentials
 }
 
@@ -234,52 +290,25 @@ pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
 
 fn parse_allow_credentials(
   entries: List(#(String, List(String))),
-) -> Result(List(glasslock.CredentialDescriptor), Error) {
+) -> Result(List(#(BitArray, List(glasslock.Transport))), Error) {
   list.try_map(entries, fn(entry) {
     let #(id_b64, transport_strings) = entry
     use raw <- result.try(
       wrap_error(internal.decode_base64url(id_b64, "allow_credentials")),
     )
-    Ok(glasslock.CredentialDescriptor(
-      id: glasslock.CredentialId(raw),
-      transports: list.filter_map(
-        transport_strings,
-        internal.transport_from_string,
-      ),
+    Ok(#(
+      raw,
+      list.filter_map(transport_strings, internal.transport_from_string),
     ))
   })
 }
 
-/// Returns an `Options` record with default values. With the empty
-/// `allow_credentials` default, this configures the discoverable (passkey)
-/// flow where the authenticator selects a credential.
-pub fn default_options() -> Options {
-  Options(
-    timeout: duration.minutes(1),
-    user_verification: option.None,
-    allow_cross_origin: False,
-    allow_credentials: [],
-    allowed_top_origins: [],
-  )
-}
-
-/// Generate authentication options and a challenge verifier.
+/// Generate authentication options and a challenge verifier from a builder.
 ///
 /// The first element is a `PublicKeyCredentialRequestOptionsJSON` value
 /// ready to serialize with `gleam/json.to_string` or embed inside a
 /// response envelope. The second is the verifier to pass to `verify`.
-pub fn request(
-  relying_party_id relying_party_id: String,
-  origins origins: List(String),
-  options options: Options,
-) -> Result(#(Json, Challenge), Error) {
-  use <- bool.guard(
-    when: list.is_empty(origins),
-    return: Error(ParseError(
-      "no allowed origins configured; pass a non-empty origins list to request",
-    )),
-  )
-
+pub fn build(builder: Builder) -> #(Json, Challenge) {
   let challenge_bytes = crypto.random_bytes(32)
   let challenge_b64 = bit_array.base64_url_encode(challenge_bytes, False)
 
@@ -287,13 +316,13 @@ pub fn request(
     json.object(
       [
         #("challenge", json.string(challenge_b64)),
-        #("rpId", json.string(relying_party_id)),
-        #("timeout", json.int(duration.to_milliseconds(options.timeout))),
+        #("rpId", json.string(builder.relying_party_id)),
+        #("timeout", json.int(duration.to_milliseconds(builder.timeout))),
       ]
-      |> maybe_add_user_verification(options.user_verification)
+      |> maybe_add_user_verification(builder.user_verification)
       |> internal.maybe_add_credential_descriptors(
         key: "allowCredentials",
-        credentials: options.allow_credentials,
+        credentials: builder.allow_credentials,
       ),
     )
 
@@ -301,19 +330,19 @@ pub fn request(
     Challenge(
       data: internal.ChallengeData(
         bytes: challenge_bytes,
-        origins: set.from_list(origins),
-        rp_id: relying_party_id,
+        origins: set.from_list(builder.origins),
+        rp_id: builder.relying_party_id,
         user_verification: option.unwrap(
-          options.user_verification,
+          builder.user_verification,
           glasslock.VerificationPreferred,
         ),
-        allow_cross_origin: options.allow_cross_origin,
-        allowed_top_origins: options.allowed_top_origins,
+        allow_cross_origin: builder.allow_cross_origin,
+        allowed_top_origins: builder.allowed_top_origins,
       ),
-      allowed_credentials: options.allow_credentials,
+      allowed_credentials: builder.allow_credentials,
     )
 
-  Ok(#(options_json, challenge))
+  #(options_json, challenge)
 }
 
 fn maybe_add_user_verification(
@@ -349,7 +378,7 @@ pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
   )
 
   internal.decode_optional_base64url(response.user_handle, "userHandle")
-  |> result.map(ResponseInfo(glasslock.CredentialId(raw_id), _))
+  |> result.map(ResponseInfo(raw_id, _))
   |> wrap_error
 }
 
@@ -404,14 +433,15 @@ pub fn verify(
   // the caller looked up. Both are required: the allow-list enforces the
   // RP's policy, and the stored-ID match prevents using one credential's
   // response to authenticate as another.
-  let presented_id = glasslock.CredentialId(raw_id)
   use <- bool.guard(
     when: !list.is_empty(challenge.allowed_credentials)
-      && !list.any(challenge.allowed_credentials, fn(d) { d.id == presented_id }),
+      && !list.any(challenge.allowed_credentials, fn(entry) {
+      entry.0 == raw_id
+    }),
     return: Error(CredentialNotAllowed),
   )
   use <- bool.guard(
-    when: glasslock.CredentialId(raw_id) != stored.id,
+    when: raw_id != stored.id,
     return: Error(CredentialNotAllowed),
   )
 

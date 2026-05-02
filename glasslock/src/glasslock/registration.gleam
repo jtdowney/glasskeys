@@ -6,13 +6,13 @@
 //// import glasslock/registration
 ////
 //// // Generate options for browser
-//// let assert Ok(#(request_json, challenge)) =
-////   registration.request(
+//// let #(request_json, challenge) =
+////   registration.new(
 ////     relying_party: registration.RelyingParty(id: "example.com", name: "My App"),
 ////     user: registration.User(id: user_id, name: "john", display_name: "John"),
-////     origins: ["https://example.com"],
-////     options: registration.default_options(),
+////     origin: "https://example.com",
 ////   )
+////   |> registration.build()
 ////
 //// // Send request_json to browser, receive response_json back. Keep
 //// // `challenge` in memory for a single-node deploy; to span processes
@@ -60,44 +60,6 @@ pub type AuthenticatorAttachment {
   CrossPlatform
 }
 
-/// Optional knobs for registration challenge generation. The required
-/// `relying_party`, `user`, and `origins` values are passed directly to
-/// `request`.
-pub type Options {
-  Options(
-    /// Timeout for the ceremony. Defaults to 1 minute.
-    timeout: Duration,
-    /// Restrict authenticator type. `option.None` allows any.
-    authenticator_attachment: Option(AuthenticatorAttachment),
-    /// Discoverable credential requirement. `option.None` omits the field
-    /// from the JSON sent to the browser; the browser then applies the spec
-    /// default of `discouraged`.
-    resident_key: Option(ResidentKey),
-    /// User verification requirement. `option.None` omits the field from
-    /// the JSON sent to the browser; the browser applies the spec default
-    /// of `preferred` and verify treats the policy as `preferred`.
-    user_verification: Option(glasslock.UserVerification),
-    /// Whether to allow cross-origin requests. Defaults to `False`.
-    allow_cross_origin: Bool,
-    /// Accepted signing algorithms, in preference order (the authenticator
-    /// picks the first it supports). Must be non-empty. Defaults to `[Es256]`
-    /// because it is the one algorithm every mainstream authenticator handles;
-    /// opt in to `Ed25519` or `Rs256` when broader coverage is desired.
-    algorithms: List(Algorithm),
-    /// Credentials to exclude (prevent re-registration). Build each entry
-    /// from a stored `glasslock.Credential` with
-    /// `glasslock.CredentialDescriptor(id:, transports:)` so transport hints
-    /// are preserved.
-    exclude_credentials: List(glasslock.CredentialDescriptor),
-    /// Allowed top-level origins for cross-origin iframe verification. The
-    /// allowlist is consulted only when the browser supplies a `topOrigin`
-    /// field; older browsers omit the field even for cross-origin requests,
-    /// in which case top-origin verification is skipped.
-    /// Defaults to `[]`.
-    allowed_top_origins: List(String),
-  )
-}
-
 /// Resident key (discoverable credential) requirement.
 pub type ResidentKey {
   /// The authenticator should not create a discoverable credential.
@@ -143,6 +105,25 @@ pub type Error {
   UserVerificationFailed
 }
 
+/// Configuration for a registration request, built up via `new` and the
+/// setter functions, then handed to `build` to produce browser options
+/// and a challenge verifier.
+pub opaque type Builder {
+  Builder(
+    relying_party: RelyingParty,
+    user: User,
+    origins: List(String),
+    timeout: Duration,
+    authenticator_attachment: Option(AuthenticatorAttachment),
+    resident_key: Option(ResidentKey),
+    user_verification: Option(glasslock.UserVerification),
+    allow_cross_origin: Bool,
+    algorithms: List(Algorithm),
+    exclude_credentials: List(#(BitArray, List(glasslock.Transport))),
+    allowed_top_origins: List(String),
+  )
+}
+
 /// A finalized registration challenge ready for verification.
 pub opaque type Challenge {
   Challenge(data: internal.ChallengeData, algorithms: List(Algorithm))
@@ -157,6 +138,108 @@ type ParsedResponse {
     attestation_object: String,
     transports: List(String),
   )
+}
+
+/// Start a new registration request builder with the required fields.
+///
+/// Defaults: 1-minute timeout, ECDSA P-256 algorithm, no excluded credentials,
+/// cross-origin disallowed. Layer on optional configuration with the setter
+/// functions before calling `build`.
+pub fn new(
+  relying_party relying_party: RelyingParty,
+  user user: User,
+  origin origin: String,
+) -> Builder {
+  Builder(
+    relying_party:,
+    user:,
+    origins: [origin],
+    timeout: duration.minutes(1),
+    authenticator_attachment: option.None,
+    resident_key: option.None,
+    user_verification: option.None,
+    allow_cross_origin: False,
+    algorithms: [Es256],
+    exclude_credentials: [],
+    allowed_top_origins: [],
+  )
+}
+
+/// Add an additional accepted origin. The origin passed to `new` is always
+/// included; this function appends further origins. The signed
+/// `clientDataJSON.origin` returned by the authenticator must match one of
+/// them.
+pub fn origin(builder: Builder, origin: String) -> Builder {
+  Builder(..builder, origins: [origin, ..builder.origins])
+}
+
+/// Set the ceremony timeout. Defaults to 1 minute.
+pub fn timeout(builder: Builder, timeout: Duration) -> Builder {
+  Builder(..builder, timeout:)
+}
+
+/// Restrict authenticator type. Omitted by default (any authenticator).
+pub fn authenticator_attachment(
+  builder: Builder,
+  attachment: AuthenticatorAttachment,
+) -> Builder {
+  Builder(..builder, authenticator_attachment: option.Some(attachment))
+}
+
+/// Set the discoverable credential requirement. When unset the field is
+/// omitted from the JSON sent to the browser, and the browser applies the
+/// spec default of `discouraged`.
+pub fn resident_key(builder: Builder, resident_key: ResidentKey) -> Builder {
+  Builder(..builder, resident_key: option.Some(resident_key))
+}
+
+/// Set the user verification requirement. When unset the field is omitted
+/// from the JSON sent to the browser; the browser applies the spec default
+/// of `preferred`, and verify treats the policy as `preferred`.
+pub fn user_verification(
+  builder: Builder,
+  user_verification: glasslock.UserVerification,
+) -> Builder {
+  Builder(..builder, user_verification: option.Some(user_verification))
+}
+
+/// Allow cross-origin requests. Defaults to disallowed.
+pub fn allow_cross_origin(builder: Builder, allow: Bool) -> Builder {
+  Builder(..builder, allow_cross_origin: allow)
+}
+
+/// Replace the list of accepted signing algorithms, in preference order
+/// (the authenticator picks the first it supports). Must be non-empty.
+/// Defaults to `[Es256]` because it is the one algorithm every mainstream
+/// authenticator handles; opt in to `Ed25519` or `Rs256` when broader
+/// coverage is desired.
+pub fn algorithms(builder: Builder, algorithms: List(Algorithm)) -> Builder {
+  Builder(..builder, algorithms:)
+}
+
+/// Add a credential to the `excludeCredentials` list (prevent
+/// re-registration on this authenticator). Pass the stored credential's
+/// `id` and `transports` so the browser can route the request.
+pub fn exclude_credential(
+  builder: Builder,
+  id id: BitArray,
+  transports transports: List(glasslock.Transport),
+) -> Builder {
+  Builder(..builder, exclude_credentials: [
+    #(id, transports),
+    ..builder.exclude_credentials
+  ])
+}
+
+/// Add a top-level origin to the cross-origin iframe allowlist. The
+/// allowlist is consulted only when the browser supplies a `topOrigin`
+/// field; older browsers omit the field even for cross-origin requests,
+/// in which case top-origin verification is skipped.
+pub fn allowed_top_origin(builder: Builder, origin: String) -> Builder {
+  Builder(..builder, allowed_top_origins: [
+    origin,
+    ..builder.allowed_top_origins
+  ])
 }
 
 /// Serialize a registration challenge for out-of-process storage between the
@@ -216,51 +299,19 @@ pub fn parse_challenge(encoded: String) -> Result(Challenge, Error) {
   Ok(Challenge(data:, algorithms:))
 }
 
-/// Returns an `Options` record with default values.
-pub fn default_options() -> Options {
-  Options(
-    timeout: duration.minutes(1),
-    authenticator_attachment: option.None,
-    resident_key: option.None,
-    user_verification: option.None,
-    allow_cross_origin: False,
-    algorithms: [Es256],
-    exclude_credentials: [],
-    allowed_top_origins: [],
-  )
-}
-
-/// Generate registration options and a challenge verifier.
+/// Generate registration options and a challenge verifier from a builder.
 ///
 /// The first element is a `PublicKeyCredentialCreationOptionsJSON` value
 /// ready to serialize with `gleam/json.to_string` or embed inside a
 /// response envelope. The second is the verifier to pass to `verify`.
-pub fn request(
-  relying_party relying_party: RelyingParty,
-  user user: User,
-  origins origins: List(String),
-  options options: Options,
-) -> Result(#(Json, Challenge), Error) {
-  use <- bool.guard(
-    when: list.is_empty(origins),
-    return: Error(ParseError(
-      "no allowed origins configured; pass a non-empty origins list to request",
-    )),
-  )
-  use <- bool.guard(
-    when: list.is_empty(options.algorithms),
-    return: Error(ParseError(
-      "no algorithms configured; pass a non-empty algorithms list to request",
-    )),
-  )
-
+pub fn build(builder: Builder) -> #(Json, Challenge) {
   let challenge_bytes = crypto.random_bytes(32)
   let challenge_b64 = bit_array.base64_url_encode(challenge_bytes, False)
 
-  let user_id_b64 = bit_array.base64_url_encode(user.id, False)
+  let user_id_b64 = bit_array.base64_url_encode(builder.user.id, False)
 
   let pub_key_params =
-    list.map(options.algorithms, fn(alg) {
+    list.map(builder.algorithms, fn(alg) {
       json.object([
         #("type", json.string("public-key")),
         #("alg", json.int(algorithm_to_cose(alg))),
@@ -269,9 +320,9 @@ pub fn request(
 
   let authenticator_selection_fields =
     []
-    |> maybe_add_attachment(options.authenticator_attachment)
-    |> maybe_add_user_verification(options.user_verification)
-    |> maybe_add_resident_key(options.resident_key)
+    |> maybe_add_attachment(builder.authenticator_attachment)
+    |> maybe_add_user_verification(builder.user_verification)
+    |> maybe_add_resident_key(builder.resident_key)
 
   let options_json =
     json.object(
@@ -280,25 +331,25 @@ pub fn request(
         #(
           "rp",
           json.object([
-            #("id", json.string(relying_party.id)),
-            #("name", json.string(relying_party.name)),
+            #("id", json.string(builder.relying_party.id)),
+            #("name", json.string(builder.relying_party.name)),
           ]),
         ),
         #(
           "user",
           json.object([
             #("id", json.string(user_id_b64)),
-            #("name", json.string(user.name)),
-            #("displayName", json.string(user.display_name)),
+            #("name", json.string(builder.user.name)),
+            #("displayName", json.string(builder.user.display_name)),
           ]),
         ),
         #("pubKeyCredParams", json.preprocessed_array(pub_key_params)),
-        #("timeout", json.int(duration.to_milliseconds(options.timeout))),
+        #("timeout", json.int(duration.to_milliseconds(builder.timeout))),
       ]
       |> maybe_add_authenticator_selection(authenticator_selection_fields)
       |> internal.maybe_add_credential_descriptors(
         key: "excludeCredentials",
-        credentials: options.exclude_credentials,
+        credentials: builder.exclude_credentials,
       ),
     )
 
@@ -306,19 +357,19 @@ pub fn request(
     Challenge(
       data: internal.ChallengeData(
         bytes: challenge_bytes,
-        origins: set.from_list(origins),
-        rp_id: relying_party.id,
+        origins: set.from_list(builder.origins),
+        rp_id: builder.relying_party.id,
         user_verification: option.unwrap(
-          options.user_verification,
+          builder.user_verification,
           glasslock.VerificationPreferred,
         ),
-        allow_cross_origin: options.allow_cross_origin,
-        allowed_top_origins: options.allowed_top_origins,
+        allow_cross_origin: builder.allow_cross_origin,
+        allowed_top_origins: builder.allowed_top_origins,
       ),
-      algorithms: options.algorithms,
+      algorithms: builder.algorithms,
     )
 
-  Ok(#(options_json, challenge))
+  #(options_json, challenge)
 }
 
 fn algorithm_to_cose(alg: Algorithm) -> Int {
@@ -521,7 +572,7 @@ pub fn verify(
   )
 
   Ok(glasslock.Credential(
-    id: glasslock.CredentialId(attested.credential_id),
+    id: attested.credential_id,
     public_key: glasslock.PublicKey(attested.public_key_cbor),
     sign_count: auth_data.sign_count,
     transports: list.filter_map(

@@ -113,8 +113,7 @@ pub fn save(
   user_id: BitArray,
   credential: glasslock.Credential,
 ) -> Result(Nil, SaveError) {
-  let glasslock.CredentialId(raw_credential_id) = credential.id
-  let cred_key = bit_array.base64_url_encode(raw_credential_id, False)
+  let cred_key = bit_array.base64_url_encode(credential.id, False)
   let uid_key = bit_array.base64_url_encode(user_id, False)
 
   trove.transaction(store.db, timeout: trove_timeout, callback: fn(tx) {

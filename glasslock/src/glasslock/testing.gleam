@@ -14,13 +14,13 @@
 //// import glasslock/testing
 ////
 //// pub fn registration_test() {
-////   let assert Ok(#(_, challenge)) =
-////     registration.request(
+////   let #(_, challenge) =
+////     registration.new(
 ////       relying_party: registration.RelyingParty(id: "example.com", name: "Test"),
 ////       user: registration.User(id: <<1, 2, 3>>, name: "test", display_name: "Test"),
-////       origins: ["https://example.com"],
-////       options: registration.default_options(),
+////       origin: "https://example.com",
 ////     )
+////     |> registration.build()
 ////
 ////   let response = testing.build_registration_response(challenge: challenge)
 ////   let response_json = testing.to_registration_json(response)
@@ -84,7 +84,7 @@ pub type RegistrationResponse {
     attestation_object: BitArray,
     /// UTF-8 encoded client data JSON.
     client_data_json: BitArray,
-    credential_id: glasslock.CredentialId,
+    credential_id: BitArray,
     /// Retained on the response so downstream authentication tests can
     /// reuse the same key for signing.
     keypair: KeyPair,
@@ -151,7 +151,7 @@ pub fn sign_authentication_message(
 /// Convert an authentication response to an AuthenticationResponseJSON string.
 pub fn to_authentication_json(
   response: AuthenticationResponse,
-  credential_id credential_id: glasslock.CredentialId,
+  credential_id credential_id: BitArray,
   user_handle user_handle: Option(BitArray),
 ) -> String {
   to_authentication_json_with(
@@ -174,7 +174,7 @@ pub fn to_authentication_json(
 /// from `rawId` (used by mismatch tests). `None` keeps both derived from
 /// `credential_id`.
 pub fn to_authentication_json_with(
-  credential_id credential_id: glasslock.CredentialId,
+  credential_id credential_id: BitArray,
   authenticator_data authenticator_data: BitArray,
   client_data_json client_data_json: BitArray,
   signature signature: BitArray,
@@ -183,25 +183,35 @@ pub fn to_authentication_json_with(
   id_override id_override: Option(String),
 ) -> String {
   let user_handle_json = case user_handle {
-    option.Some(handle) -> b64_json(handle)
+    option.Some(handle) ->
+      json.string(bit_array.base64_url_encode(handle, False))
     option.None -> json.null()
   }
 
-  let glasslock.CredentialId(raw_credential_id) = credential_id
+  let credential_id_b64 = bit_array.base64_url_encode(credential_id, False)
   let id_json = case id_override {
     option.Some(s) -> json.string(s)
-    option.None -> b64_json(raw_credential_id)
+    option.None -> json.string(credential_id_b64)
   }
   json.object([
     #("id", id_json),
-    #("rawId", b64_json(raw_credential_id)),
+    #("rawId", json.string(credential_id_b64)),
     #("type", json.string(credential_type)),
     #(
       "response",
       json.object([
-        #("clientDataJSON", b64_json(client_data_json)),
-        #("authenticatorData", b64_json(authenticator_data)),
-        #("signature", b64_json(signature)),
+        #(
+          "clientDataJSON",
+          json.string(bit_array.base64_url_encode(client_data_json, False)),
+        ),
+        #(
+          "authenticatorData",
+          json.string(bit_array.base64_url_encode(authenticator_data, False)),
+        ),
+        #(
+          "signature",
+          json.string(bit_array.base64_url_encode(signature, False)),
+        ),
         #("userHandle", user_handle_json),
       ]),
     ),
@@ -407,7 +417,7 @@ pub fn build_attestation_object_with_non_empty_attstmt(
 /// Pass `cose_key(keypair)` for the COSE key parameter.
 pub fn build_registration_authenticator_data(
   relying_party_id relying_party_id: String,
-  credential_id credential_id: glasslock.CredentialId,
+  credential_id credential_id: BitArray,
   cose_key cose_key: BitArray,
   flags flags: AuthenticatorFlags,
   sign_count sign_count: Int,
@@ -416,8 +426,7 @@ pub fn build_registration_authenticator_data(
     crypto.hash(hash.Sha256, bit_array.from_string(relying_party_id))
   let flags_byte = encode_flags(flags, has_attested_credential: True)
   let aaguid = <<0:128>>
-  let glasslock.CredentialId(raw_credential_id) = credential_id
-  let cred_id_len = bit_array.byte_size(raw_credential_id)
+  let cred_id_len = bit_array.byte_size(credential_id)
 
   bit_array.concat([
     rp_id_hash,
@@ -425,7 +434,7 @@ pub fn build_registration_authenticator_data(
     <<sign_count:size(32)>>,
     aaguid,
     <<cred_id_len:size(16)>>,
-    raw_credential_id,
+    credential_id,
     cose_key,
   ])
 }
@@ -454,7 +463,7 @@ pub fn build_registration_response_with_keypair(
 ) -> RegistrationResponse {
   let data = registration.challenge_data(challenge)
   let assert Ok(origin) = list.first(set.to_list(data.origins))
-  let credential_id = glasslock.CredentialId(crypto.random_bytes(16))
+  let credential_id = crypto.random_bytes(16)
   let auth_data =
     build_registration_authenticator_data(
       relying_party_id: data.rp_id,
@@ -499,17 +508,22 @@ pub fn to_registration_json(response: RegistrationResponse) -> String {
 /// from `rawId` (used by mismatch tests). `None` keeps both derived from
 /// `credential_id`.
 pub fn to_registration_json_with(
-  credential_id credential_id: glasslock.CredentialId,
+  credential_id credential_id: BitArray,
   client_data_json client_data_json: BitArray,
   attestation_object attestation_object: BitArray,
   credential_type credential_type: String,
   transports transports: List(glasslock.Transport),
   id_override id_override: Option(String),
 ) -> String {
-  let glasslock.CredentialId(raw_credential_id) = credential_id
   let response_fields = [
-    #("clientDataJSON", b64_json(client_data_json)),
-    #("attestationObject", b64_json(attestation_object)),
+    #(
+      "clientDataJSON",
+      json.string(bit_array.base64_url_encode(client_data_json, False)),
+    ),
+    #(
+      "attestationObject",
+      json.string(bit_array.base64_url_encode(attestation_object, False)),
+    ),
   ]
   let response_fields = case transports {
     [] -> response_fields
@@ -525,22 +539,19 @@ pub fn to_registration_json_with(
       ..response_fields
     ]
   }
+  let credential_id_b64 = bit_array.base64_url_encode(credential_id, False)
   let id_json = case id_override {
     option.Some(s) -> json.string(s)
-    option.None -> b64_json(raw_credential_id)
+    option.None -> json.string(credential_id_b64)
   }
   json.object([
     #("id", id_json),
-    #("rawId", b64_json(raw_credential_id)),
+    #("rawId", json.string(credential_id_b64)),
     #("type", json.string(credential_type)),
     #("response", json.object(response_fields)),
     #("clientExtensionResults", json.object([])),
   ])
   |> json.to_string
-}
-
-fn b64_json(bytes: BitArray) -> json.Json {
-  json.string(bit_array.base64_url_encode(bytes, False))
 }
 
 /// Extract the random challenge bytes from a registration challenge.

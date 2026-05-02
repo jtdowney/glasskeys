@@ -216,14 +216,13 @@ pub fn parse_authentication_auth_data_rejects_trailing_bytes_test() {
 pub fn parse_registration_auth_data_ignores_extensions_test() {
   let keypair = testing.generate_es256_keypair()
   let cose_key = testing.cose_key(keypair)
-  let credential_id = glasslock.CredentialId(<<1, 2, 3, 4>>)
+  let credential_id = <<1, 2, 3, 4>>
 
   let assert Ok(rp_id_hash) =
     crypto.hash(hash.Sha256, bit_array.from_string("example.com"))
   let flags_byte = 0xC1
   let aaguid = <<0:128>>
-  let glasslock.CredentialId(raw_cred_id) = credential_id
-  let cred_id_len = bit_array.byte_size(raw_cred_id)
+  let cred_id_len = bit_array.byte_size(credential_id)
   let extension_data = <<0xA0>>
   let auth_data =
     bit_array.concat([
@@ -232,7 +231,7 @@ pub fn parse_registration_auth_data_ignores_extensions_test() {
       <<0x00, 0x00, 0x00, 0x00>>,
       aaguid,
       <<cred_id_len:size(16)>>,
-      raw_cred_id,
+      credential_id,
       cose_key,
       extension_data,
     ])
@@ -240,7 +239,7 @@ pub fn parse_registration_auth_data_ignores_extensions_test() {
   let assert Ok(ad) = internal.parse_registration_auth_data(auth_data)
   assert ad.user_present
   assert ad.sign_count == 0
-  assert ad.attested_credential.credential_id == raw_cred_id
+  assert ad.attested_credential.credential_id == credential_id
 
   let assert Ok(_) =
     internal.parse_public_key(ad.attested_credential.public_key_cbor)

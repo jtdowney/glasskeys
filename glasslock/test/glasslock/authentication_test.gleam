@@ -29,10 +29,6 @@ fn user_verification_generator() -> qcheck.Generator(glasslock.UserVerification)
   ])
 }
 
-fn credential_id_generator() -> qcheck.Generator(glasslock.CredentialId) {
-  qcheck.byte_aligned_bit_array() |> qcheck.map(glasslock.CredentialId)
-}
-
 fn transport_generator() -> qcheck.Generator(glasslock.Transport) {
   qcheck.from_generators(qcheck.return(glasslock.TransportUsb), [
     qcheck.return(glasslock.TransportNfc),
@@ -44,12 +40,12 @@ fn transport_generator() -> qcheck.Generator(glasslock.Transport) {
 }
 
 fn credential_descriptor_generator() -> qcheck.Generator(
-  glasslock.CredentialDescriptor,
+  #(BitArray, List(glasslock.Transport)),
 ) {
   qcheck.map2(
-    credential_id_generator(),
+    qcheck.byte_aligned_bit_array(),
     qcheck.list_from(transport_generator()),
-    fn(id, transports) { glasslock.CredentialDescriptor(id:, transports:) },
+    fn(id, transports) { #(id, transports) },
   )
 }
 
@@ -60,7 +56,7 @@ type AuthSetup {
     allow_cross_origin: Bool,
     allowed_top_origins: List(String),
     allow_credentials_override: option.Option(
-      List(glasslock.CredentialDescriptor),
+      List(#(BitArray, List(glasslock.Transport))),
     ),
     generate_keypair: fn() -> testing.KeyPair,
   )
@@ -92,32 +88,34 @@ fn setup_authentication_with(
   let credential_id = crypto.random_bytes(16)
   let stored_credential =
     glasslock.Credential(
-      id: glasslock.CredentialId(credential_id),
+      id: credential_id,
       public_key: testing.public_key(keypair),
       sign_count: config.stored_sign_count,
       transports: [],
     )
   let allow_credentials = case config.allow_credentials_override {
-    option.None -> [
-      glasslock.CredentialDescriptor(
-        id: stored_credential.id,
-        transports: stored_credential.transports,
-      ),
-    ]
+    option.None -> [#(stored_credential.id, stored_credential.transports)]
     option.Some(descriptors) -> descriptors
   }
-  let assert Ok(#(_, challenge)) =
-    authentication.request(
+  let builder =
+    authentication.new(
       relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.Options(
-        ..authentication.default_options(),
-        allow_credentials:,
-        user_verification: option.Some(config.user_verification),
-        allow_cross_origin: config.allow_cross_origin,
-        allowed_top_origins: config.allowed_top_origins,
-      ),
+      origin: "https://example.com",
     )
+    |> authentication.user_verification(config.user_verification)
+    |> authentication.allow_cross_origin(config.allow_cross_origin)
+  let builder =
+    list.fold(allow_credentials, builder, fn(b, entry) {
+      let #(id, transports) = entry
+      authentication.allow_credential(b, id:, transports:)
+    })
+  let builder =
+    list.fold(
+      config.allowed_top_origins,
+      builder,
+      authentication.allowed_top_origin,
+    )
+  let #(_, challenge) = authentication.build(builder)
   #(challenge, stored_credential, keypair)
 }
 
@@ -212,12 +210,12 @@ fn response_envelope(
 }
 
 pub fn request_emits_core_fields_test() {
-  let assert Ok(#(options_json, challenge)) =
-    authentication.request(
+  let #(options_json, challenge) =
+    authentication.new(
       relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.default_options(),
+      origin: "https://example.com",
     )
+    |> authentication.build()
 
   let decoder = {
     use relying_party_id <- decode.field("rpId", decode.string)
@@ -246,24 +244,17 @@ pub fn request_emits_core_fields_test() {
 pub fn request_with_allow_credentials_test() {
   let cred1 = <<1, 2, 3, 4>>
   let cred2 = <<5, 6, 7, 8>>
-  let assert Ok(#(options_json, _)) =
-    authentication.request(
+  let #(options_json, _) =
+    authentication.new(
       relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.Options(
-        ..authentication.default_options(),
-        allow_credentials: [
-          glasslock.CredentialDescriptor(
-            id: glasslock.CredentialId(cred1),
-            transports: [],
-          ),
-          glasslock.CredentialDescriptor(
-            id: glasslock.CredentialId(cred2),
-            transports: [glasslock.TransportUsb, glasslock.TransportNfc],
-          ),
-        ],
-      ),
+      origin: "https://example.com",
     )
+    |> authentication.allow_credential(id: cred1, transports: [])
+    |> authentication.allow_credential(id: cred2, transports: [
+      glasslock.TransportUsb,
+      glasslock.TransportNfc,
+    ])
+    |> authentication.build()
 
   let entry_decoder = {
     use id <- decode.field("id", decode.string)
@@ -281,23 +272,9 @@ pub fn request_with_allow_credentials_test() {
   let assert Ok(entries) = json.parse(json.to_string(options_json), decoder)
   assert entries
     == [
-      #(bit_array.base64_url_encode(cred1, False), []),
       #(bit_array.base64_url_encode(cred2, False), ["usb", "nfc"]),
+      #(bit_array.base64_url_encode(cred1, False), []),
     ]
-}
-
-pub fn request_rejects_empty_origins_test() {
-  let result =
-    authentication.request(
-      relying_party_id: "example.com",
-      origins: [],
-      options: authentication.default_options(),
-    )
-
-  assert result
-    == Error(authentication.ParseError(
-      "no allowed origins configured; pass a non-empty origins list to request",
-    ))
 }
 
 pub fn verify_valid_authentication_test() {
@@ -431,11 +408,7 @@ pub fn verify_rejects_origin_mismatch_test() {
 }
 
 pub fn verify_rejects_credential_not_allowed_test() {
-  let other_descriptor =
-    glasslock.CredentialDescriptor(
-      id: glasslock.CredentialId(crypto.random_bytes(16)),
-      transports: [],
-    )
+  let other_descriptor = #(crypto.random_bytes(16), [])
   let #(challenge, stored_credential, keypair) =
     setup_authentication_with(
       AuthSetup(
@@ -466,7 +439,7 @@ pub fn verify_rejects_credential_id_mismatch_test() {
         allow_credentials_override: option.Some([]),
       ),
     )
-  let different_credential_id = glasslock.CredentialId(crypto.random_bytes(16))
+  let different_credential_id = crypto.random_bytes(16)
 
   let response =
     testing.build_authentication_response(challenge:, keypair:, sign_count: 1)
@@ -486,8 +459,7 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
   let #(challenge, stored_credential, keypair) = setup_authentication()
   let response =
     testing.build_authentication_response(challenge:, keypair:, sign_count: 1)
-  let glasslock.CredentialId(raw_id_bytes) = stored_credential.id
-  let raw_id_b64 = bit_array.base64_url_encode(raw_id_bytes, False)
+  let raw_id_b64 = bit_array.base64_url_encode(stored_credential.id, False)
   let mismatched_id_b64 =
     bit_array.base64_url_encode(<<99, 99, 99, 99, 99, 99, 99, 99>>, False)
   let response_json =
@@ -1051,7 +1023,7 @@ pub fn parse_response_roundtrip_test() {
     )
 
   let assert Ok(info) = authentication.parse_response(response_json)
-  assert info.credential_id == glasslock.CredentialId(credential_id)
+  assert info.credential_id == credential_id
   assert info.user_handle == user_handle
 }
 
@@ -1093,7 +1065,7 @@ pub fn parse_response_rejects_id_raw_id_mismatch_test() {
     bit_array.base64_url_encode(<<99, 99, 99, 99, 99, 99, 99, 99>>, False)
   let response_json =
     testing.to_authentication_json_with(
-      credential_id: glasslock.CredentialId(<<1, 2, 3, 4, 5, 6, 7, 8>>),
+      credential_id: <<1, 2, 3, 4, 5, 6, 7, 8>>,
       authenticator_data: <<"test":utf8>>,
       client_data_json: <<"test":utf8>>,
       signature: <<"test":utf8>>,
@@ -1121,26 +1093,22 @@ pub fn sign_count_monotonicity_test() {
   let public_key = testing.public_key(keypair)
   let stored_cred =
     glasslock.Credential(
-      id: glasslock.CredentialId(credential_id),
+      id: credential_id,
       public_key: public_key,
       sign_count: stored,
       transports: [],
     )
 
-  let assert Ok(#(_, challenge)) =
-    authentication.request(
+  let #(_, challenge) =
+    authentication.new(
       relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.Options(
-        ..authentication.default_options(),
-        allow_credentials: [
-          glasslock.CredentialDescriptor(
-            id: stored_cred.id,
-            transports: stored_cred.transports,
-          ),
-        ],
-      ),
+      origin: "https://example.com",
     )
+    |> authentication.allow_credential(
+      id: stored_cred.id,
+      transports: stored_cred.transports,
+    )
+    |> authentication.build()
   let response =
     testing.build_authentication_response(
       challenge: challenge,
@@ -1150,7 +1118,7 @@ pub fn sign_count_monotonicity_test() {
   let response_json =
     testing.to_authentication_json(
       response,
-      credential_id: glasslock.CredentialId(credential_id),
+      credential_id: credential_id,
       user_handle: option.None,
     )
 
@@ -1190,19 +1158,21 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
     allow_cross_origin,
     user_verification,
   ) = inputs
+  let assert [first_origin, ..rest_origins] = origins
 
-  let assert Ok(#(_, challenge)) =
-    authentication.request(
-      relying_party_id:,
-      origins:,
-      options: authentication.Options(
-        ..authentication.default_options(),
-        allow_credentials:,
-        allow_cross_origin:,
-        allowed_top_origins:,
-        user_verification: option.Some(user_verification),
-      ),
-    )
+  let builder =
+    authentication.new(relying_party_id:, origin: first_origin)
+    |> authentication.allow_cross_origin(allow_cross_origin)
+    |> authentication.user_verification(user_verification)
+  let builder = list.fold(rest_origins, builder, authentication.origin)
+  let builder =
+    list.fold(allow_credentials, builder, fn(b, entry) {
+      let #(id, transports) = entry
+      authentication.allow_credential(b, id:, transports:)
+    })
+  let builder =
+    list.fold(allowed_top_origins, builder, authentication.allowed_top_origin)
+  let #(_, challenge) = authentication.build(builder)
 
   let encoded = authentication.encode_challenge(challenge)
   let assert Ok(decoded) = authentication.parse_challenge(encoded)
@@ -1225,27 +1195,27 @@ pub fn encode_decode_roundtrip_preserves_challenge_test() {
 }
 
 pub fn decoded_challenge_drives_verify_test() {
-  let cred_a =
-    glasslock.CredentialDescriptor(
-      id: glasslock.CredentialId(<<1, 2, 3, 4>>),
-      transports: [],
-    )
-  let cred_b =
-    glasslock.CredentialDescriptor(
-      id: glasslock.CredentialId(<<5, 6, 7, 8>>),
-      transports: [glasslock.TransportInternal],
-    )
-  let assert Ok(#(_, challenge)) =
-    authentication.request(
+  let cred_a_id = <<1, 2, 3, 4>>
+  let cred_a_transports = []
+  let cred_b_id = <<5, 6, 7, 8>>
+  let cred_b_transports = [glasslock.TransportInternal]
+  let #(_, challenge) =
+    authentication.new(
       relying_party_id: "example.com",
-      origins: ["https://example.com", "https://alt.example.com"],
-      options: authentication.Options(
-        ..authentication.default_options(),
-        allow_cross_origin: True,
-        allow_credentials: [cred_a, cred_b],
-        allowed_top_origins: ["https://top.example.com"],
-      ),
+      origin: "https://example.com",
     )
+    |> authentication.origin("https://alt.example.com")
+    |> authentication.allow_cross_origin(True)
+    |> authentication.allow_credential(
+      id: cred_a_id,
+      transports: cred_a_transports,
+    )
+    |> authentication.allow_credential(
+      id: cred_b_id,
+      transports: cred_b_transports,
+    )
+    |> authentication.allowed_top_origin("https://top.example.com")
+    |> authentication.build()
 
   let encoded = authentication.encode_challenge(challenge)
   let assert Ok(decoded) = authentication.parse_challenge(encoded)
@@ -1253,10 +1223,10 @@ pub fn decoded_challenge_drives_verify_test() {
   let keypair = testing.generate_es256_keypair()
   let stored_credential =
     glasslock.Credential(
-      id: cred_a.id,
+      id: cred_a_id,
       public_key: testing.public_key(keypair),
       sign_count: 0,
-      transports: cred_a.transports,
+      transports: cred_a_transports,
     )
   let response =
     testing.build_authentication_response(
@@ -1279,8 +1249,8 @@ pub fn decoded_challenge_drives_verify_test() {
 }
 
 pub fn decode_rejects_registration_blob_test() {
-  let assert Ok(#(_, reg_challenge)) =
-    registration.request(
+  let #(_, reg_challenge) =
+    registration.new(
       relying_party: registration.RelyingParty(
         id: "example.com",
         name: "Test App",
@@ -1290,9 +1260,9 @@ pub fn decode_rejects_registration_blob_test() {
         name: "testuser",
         display_name: "Test User",
       ),
-      origins: ["https://example.com"],
-      options: registration.default_options(),
+      origin: "https://example.com",
     )
+    |> registration.build()
   let encoded = registration.encode_challenge(reg_challenge)
 
   let result = authentication.parse_challenge(encoded)
@@ -1342,27 +1312,18 @@ pub fn decode_rejects_missing_allow_credentials_test() {
 }
 
 pub fn request_emits_compat_json_test() {
-  let assert Ok(#(options_json, challenge)) =
-    authentication.request(
+  let #(options_json, challenge) =
+    authentication.new(
       relying_party_id: "example.com",
-      origins: ["https://example.com"],
-      options: authentication.Options(
-        timeout: duration.seconds(45),
-        user_verification: option.None,
-        allow_cross_origin: False,
-        allow_credentials: [
-          glasslock.CredentialDescriptor(
-            id: glasslock.CredentialId(<<30, 31, 32, 33>>),
-            transports: [],
-          ),
-          glasslock.CredentialDescriptor(
-            id: glasslock.CredentialId(<<40, 41, 42>>),
-            transports: [glasslock.TransportHybrid, glasslock.TransportInternal],
-          ),
-        ],
-        allowed_top_origins: [],
-      ),
+      origin: "https://example.com",
     )
+    |> authentication.timeout(duration.seconds(45))
+    |> authentication.allow_credential(id: <<30, 31, 32, 33>>, transports: [])
+    |> authentication.allow_credential(id: <<40, 41, 42>>, transports: [
+      glasslock.TransportHybrid,
+      glasslock.TransportInternal,
+    ])
+    |> authentication.build()
 
   let challenge_b64 =
     bit_array.base64_url_encode(

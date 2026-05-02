@@ -649,7 +649,7 @@ pub fn verify_user_policies(
 pub fn maybe_add_credential_descriptors(
   fields: List(#(String, json.Json)),
   key key: String,
-  credentials credentials: List(glasslock.CredentialDescriptor),
+  credentials credentials: List(#(BitArray, List(glasslock.Transport))),
 ) -> List(#(String, json.Json)) {
   case credentials {
     [] -> fields
@@ -658,11 +658,10 @@ pub fn maybe_add_credential_descriptors(
 }
 
 fn encode_credential_descriptors(
-  creds: List(glasslock.CredentialDescriptor),
+  creds: List(#(BitArray, List(glasslock.Transport))),
 ) -> json.Json {
-  json.array(creds, fn(descriptor) {
-    let glasslock.CredentialDescriptor(id:, transports:) = descriptor
-    let glasslock.CredentialId(raw_id) = id
+  json.array(creds, fn(entry) {
+    let #(raw_id, transports) = entry
     let base = [
       #("id", json.string(bit_array.base64_url_encode(raw_id, False))),
       #("type", json.string("public-key")),

@@ -5,7 +5,7 @@ import gleam/bit_array
 import gleam/crypto
 import gleam/dynamic/decode
 import gleam/json
-import gleam/option
+import gleam/list
 import gleam/result
 import gleam/string
 import wisp
@@ -64,8 +64,9 @@ fn begin_registration(
     Error(_) -> {
       let user_id = crypto.strong_random_bytes(16)
 
-      let assert Ok(#(options_json, challenge)) =
-        registration.request(
+      let assert [first_origin, ..rest_origins] = ctx.origins
+      let builder =
+        registration.new(
           relying_party: registration.RelyingParty(
             id: ctx.rp_id,
             name: ctx.rp_name,
@@ -75,12 +76,12 @@ fn begin_registration(
             name: username,
             display_name: username,
           ),
-          origins: ctx.origins,
-          options: registration.Options(
-            ..registration.default_options(),
-            resident_key: option.Some(registration.ResidentKeyRequired),
-          ),
+          origin: first_origin,
         )
+        |> registration.resident_key(registration.ResidentKeyRequired)
+      let #(options_json, challenge) =
+        list.fold(rest_origins, builder, registration.origin)
+        |> registration.build()
 
       let pending =
         encode_pending(PendingRegistration(username:, user_id:, challenge:))

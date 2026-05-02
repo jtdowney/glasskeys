@@ -33,15 +33,16 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
       |> json.to_string
       |> wisp.json_response(404)
     Ok(allow_credentials) -> {
-      let assert Ok(#(options_json, challenge)) =
-        authentication.request(
-          relying_party_id: ctx.rp_id,
-          origins: ctx.origins,
-          options: authentication.Options(
-            ..authentication.default_options(),
-            allow_credentials:,
-          ),
-        )
+      let assert [first_origin, ..rest_origins] = ctx.origins
+      let builder =
+        authentication.new(relying_party_id: ctx.rp_id, origin: first_origin)
+      let builder = list.fold(rest_origins, builder, authentication.origin)
+      let builder =
+        list.fold(allow_credentials, builder, fn(b, entry) {
+          let #(id, transports) = entry
+          authentication.allow_credential(b, id:, transports:)
+        })
+      let #(options_json, challenge) = authentication.build(builder)
 
       let encoded = authentication.encode_challenge(challenge)
 
@@ -62,19 +63,14 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
 fn allow_credentials_for_username(
   ctx: web.Context,
   username: String,
-) -> Result(List(glasslock.CredentialDescriptor), String) {
+) -> Result(List(#(BitArray, List(glasslock.Transport))), String) {
   case username {
     "" -> Ok([])
     name ->
       case credentials.get_user(ctx.credentials, name) {
         Ok(user) ->
           Ok(
-            list.map(user.credentials, fn(cred) {
-              glasslock.CredentialDescriptor(
-                id: cred.id,
-                transports: cred.transports,
-              )
-            }),
+            list.map(user.credentials, fn(cred) { #(cred.id, cred.transports) }),
           )
         Error(_) -> Error("user not found")
       }
@@ -190,8 +186,9 @@ fn lookup_user(
   ctx: web.Context,
   info: authentication.ResponseInfo,
 ) -> Result(credentials.User, Nil) {
-  let glasslock.CredentialId(credential_id) = info.credential_id
-  case credentials.get_user_by_credential_id(ctx.credentials, credential_id) {
+  case
+    credentials.get_user_by_credential_id(ctx.credentials, info.credential_id)
+  {
     Ok(user) -> Ok(user)
     Error(_) ->
       case info.user_handle {
