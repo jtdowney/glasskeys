@@ -40,10 +40,7 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case username_result {
-    Error(_) ->
-      json.object([#("error", json.string("invalid json"))])
-      |> json.to_string
-      |> wisp.json_response(400)
+    Error(_) -> error_response("invalid json", 400)
     Ok(username) -> begin_for_username(req, ctx, username)
   }
 }
@@ -54,10 +51,7 @@ fn begin_for_username(
   username: option.Option(String),
 ) -> wisp.Response {
   case allow_credentials_for_username(ctx, username) {
-    Error(message) ->
-      json.object([#("error", json.string(message))])
-      |> json.to_string
-      |> wisp.json_response(404)
+    Error(message) -> error_response(message, 404)
     Ok(allow_credentials) -> {
       let assert [first_origin, ..rest_origins] = ctx.origins
       // User verification is preferred (the WebAuthn default) so the demo
@@ -117,10 +111,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case json.parse(body, decoder) {
-    Error(_) ->
-      json.object([#("error", json.string("invalid json"))])
-      |> json.to_string
-      |> wisp.json_response(400)
+    Error(_) -> error_response("invalid json", 400)
     Ok(response) -> complete_authentication(req, response, ctx)
   }
 }
@@ -141,7 +132,9 @@ fn complete_authentication(
     )
     use info <- result.try(
       authentication.response_info(response)
-      |> result.map_error(fn(_) { #("invalid response", 400) }),
+      |> result.map_error(fn(err) {
+        #("invalid response: " <> describe_error(err), 400)
+      }),
     )
     use user <- result.try(
       lookup_user(ctx, info)
@@ -171,11 +164,15 @@ fn complete_authentication(
       |> wisp.json_response(200)
       |> clear_session(req)
     Error(#(message, status)) ->
-      json.object([#("error", json.string(message))])
-      |> json.to_string
-      |> wisp.json_response(status)
+      error_response(message, status)
       |> clear_session(req)
   }
+}
+
+fn error_response(message: String, status: Int) -> wisp.Response {
+  json.object([#("error", json.string(message))])
+  |> json.to_string
+  |> wisp.json_response(status)
 }
 
 fn clear_session(response: wisp.Response, req: wisp.Request) -> wisp.Response {
