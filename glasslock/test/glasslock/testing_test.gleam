@@ -1,4 +1,3 @@
-import glasslock
 import glasslock/internal
 import glasslock/testing
 import gleam/bit_array

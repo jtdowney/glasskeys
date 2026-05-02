@@ -1,7 +1,7 @@
 import glasskey
 import gleam/dynamic/decode
 import gleam/http/response.{type Response}
-import gleam/json
+import gleam/json.{type Json}
 import gleam/result
 import lustre/effect.{type Effect}
 import rsvp
@@ -19,10 +19,10 @@ pub fn login_begin(
 }
 
 pub fn login_complete(
-  response: String,
+  response: Json,
   handler: fn(Result(String, String)) -> msg,
 ) -> Effect(msg) {
-  let body = json.object([#("response", json.string(response))])
+  let body = json.object([#("response", response)])
 
   let expect =
     rsvp.expect_ok_response(fn(result) { handler(decode_login_result(result)) })
@@ -45,10 +45,10 @@ pub fn register_begin(
 }
 
 pub fn register_complete(
-  response: String,
+  response: Json,
   handler: fn(Result(Nil, String)) -> msg,
 ) -> Effect(msg) {
-  let body = json.object([#("response", json.string(response))])
+  let body = json.object([#("response", response)])
 
   let expect =
     rsvp.expect_ok_response(fn(result) { handler(decode_verified(result)) })

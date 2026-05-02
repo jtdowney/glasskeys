@@ -25,7 +25,7 @@
 ////   let response = testing.build_registration_response(challenge: challenge)
 ////   let response_json = testing.to_registration_json(response)
 ////
-////   let assert Ok(credential) = registration.verify(response_json:, challenge:)
+////   let assert Ok(credential) = registration.verify_json(response_json:, challenge:)
 //// }
 //// ```
 

@@ -1,5 +1,6 @@
 import backend/credentials
 import backend/web
+import glasslock
 import glasslock/registration
 import gleam/bit_array
 import gleam/crypto
@@ -44,7 +45,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   use body <- wisp.require_string_body(req)
 
   let decoder = {
-    use response <- decode.field("response", decode.string)
+    use response <- decode.field("response", registration.response_decoder())
     decode.success(response)
   }
 
@@ -65,6 +66,8 @@ fn begin_registration(
       let user_id = crypto.strong_random_bytes(16)
 
       let assert [first_origin, ..rest_origins] = ctx.origins
+      // Resident key is required so the credential lives on the authenticator
+      // and the demo can exercise the discoverable (passkey) sign-in flow.
       let builder =
         registration.new(
           relying_party: registration.RelyingParty(
@@ -79,6 +82,7 @@ fn begin_registration(
           origin: first_origin,
         )
         |> registration.resident_key(registration.ResidentKeyRequired)
+        |> registration.user_verification(glasslock.VerificationPreferred)
       let #(options_json, challenge) =
         list.fold(rest_origins, builder, registration.origin)
         |> registration.build()
@@ -102,7 +106,7 @@ fn begin_registration(
 
 fn complete_registration(
   req: wisp.Request,
-  response_json: String,
+  response: registration.Response,
   ctx: web.Context,
 ) -> wisp.Response {
   let result = {
@@ -115,10 +119,7 @@ fn complete_registration(
       |> result.map_error(fn(_) { #("session not found", 400) }),
     )
     use credential <- result.try(
-      registration.verify(
-        response_json: response_json,
-        challenge: session.challenge,
-      )
+      registration.verify(response:, challenge: session.challenge)
       |> result.map_error(fn(_) { #("verification failed", 400) }),
     )
     credentials.save(

@@ -18,15 +18,41 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   use body <- wisp.require_string_body(req)
 
   let decoder = {
-    use username <- decode.optional_field("username", "", decode.string)
-    decode.success(username)
+    use username <- decode.optional_field(
+      "username",
+      option.None,
+      decode.optional(decode.string),
+    )
+    decode.success(
+      option.map(username, string.trim)
+      |> option.then(fn(value) {
+        case value {
+          "" -> option.None
+          _ -> option.Some(value)
+        }
+      }),
+    )
   }
 
-  let username = case json.parse(body, decoder) {
-    Ok(value) -> string.trim(value)
-    Error(_) -> ""
+  let username_result = case string.trim(body) {
+    "" -> Ok(option.None)
+    _ -> json.parse(body, decoder)
   }
 
+  case username_result {
+    Error(_) ->
+      json.object([#("error", json.string("invalid json"))])
+      |> json.to_string
+      |> wisp.json_response(400)
+    Ok(username) -> begin_for_username(req, ctx, username)
+  }
+}
+
+fn begin_for_username(
+  req: wisp.Request,
+  ctx: web.Context,
+  username: option.Option(String),
+) -> wisp.Response {
   case allow_credentials_for_username(ctx, username) {
     Error(message) ->
       json.object([#("error", json.string(message))])
@@ -34,8 +60,13 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
       |> wisp.json_response(404)
     Ok(allow_credentials) -> {
       let assert [first_origin, ..rest_origins] = ctx.origins
+      // User verification is preferred (the WebAuthn default) so the demo
+      // works on authenticators without UV capability while still requesting
+      // it when supported. Tighten to `VerificationRequired` for a deployment
+      // that mandates biometric/PIN.
       let builder =
         authentication.new(relying_party_id: ctx.rp_id, origin: first_origin)
+        |> authentication.user_verification(glasslock.VerificationPreferred)
       let builder = list.fold(rest_origins, builder, authentication.origin)
       let builder =
         list.fold(allow_credentials, builder, fn(b, entry) {
@@ -62,11 +93,11 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
 
 fn allow_credentials_for_username(
   ctx: web.Context,
-  username: String,
+  username: option.Option(String),
 ) -> Result(List(#(BitArray, List(glasslock.Transport))), String) {
   case username {
-    "" -> Ok([])
-    name ->
+    option.None -> Ok([])
+    option.Some(name) ->
       case credentials.get_user(ctx.credentials, name) {
         Ok(user) ->
           Ok(
@@ -81,7 +112,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   use body <- wisp.require_string_body(req)
 
   let decoder = {
-    use response <- decode.field("response", decode.string)
+    use response <- decode.field("response", authentication.response_decoder())
     decode.success(response)
   }
 
@@ -96,7 +127,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
 
 fn complete_authentication(
   req: wisp.Request,
-  response_json: String,
+  response: authentication.Response,
   ctx: web.Context,
 ) -> wisp.Response {
   let result = {
@@ -109,7 +140,7 @@ fn complete_authentication(
       |> result.map_error(fn(_) { #("session not found", 400) }),
     )
     use info <- result.try(
-      authentication.parse_response(response_json)
+      authentication.response_info(response)
       |> result.map_error(fn(_) { #("invalid response", 400) }),
     )
     use user <- result.try(
@@ -121,11 +152,7 @@ fn complete_authentication(
       |> result.map_error(fn(_) { #("credential not found", 400) }),
     )
     use updated_credential <- result.try(
-      authentication.verify(
-        response_json: response_json,
-        challenge:,
-        stored: stored_credential,
-      )
+      authentication.verify(response:, challenge:, stored: stored_credential)
       |> result.map_error(fn(err) {
         #("verification failed: " <> describe_error(err), 400)
       }),

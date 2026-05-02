@@ -23,7 +23,7 @@
 //// // hydrate it back with `authentication.parse_challenge`.
 ////
 //// // Verify the response
-//// case authentication.verify(response_json:, challenge:, stored: stored_credential) {
+//// case authentication.verify_json(response_json:, challenge:, stored: stored_credential) {
 ////   Ok(updated_credential) -> todo as "update stored sign_count"
 ////   Error(e) -> todo as "handle error"
 //// }
@@ -48,7 +48,7 @@
 ////   Ok(info) ->
 ////     case lookup_credential(info.credential_id) {
 ////       Ok(stored) ->
-////         case authentication.verify(response_json:, challenge:, stored:) {
+////         case authentication.verify_json(response_json:, challenge:, stored:) {
 ////           Ok(updated) -> todo as "update stored sign_count"
 ////           Error(e) -> todo as "handle verification error"
 ////         }
@@ -119,6 +119,14 @@ pub opaque type Challenge {
     data: internal.ChallengeData,
     allowed_credentials: List(#(BitArray, List(glasslock.Transport))),
   )
+}
+
+/// A parsed authentication response. Construct via `response_decoder()`
+/// (when the response arrives nested in a larger JSON envelope) or
+/// `parse_response_json` (when you have a raw response string). Pass to
+/// [`verify`](#verify) or [`response_info`](#response_info).
+pub opaque type Response {
+  Response(parsed: ParsedResponse)
 }
 
 type ParsedResponse {
@@ -361,41 +369,95 @@ fn maybe_add_user_verification(
   }
 }
 
-/// Parse response JSON to get credential_id/user_handle for lookup (discoverable flow).
+/// Decoder for an authentication response. Use when the response arrives
+/// nested in a larger JSON envelope (e.g. `{"response": <PublicKeyCredentialJSON>}`).
+/// Combine with `gleam/dynamic/decode` to extract the response and pass to
+/// [`verify`](#verify).
+pub fn response_decoder() -> decode.Decoder(Response) {
+  use credential_id <- decode.field("id", decode.string)
+  use raw_id <- decode.field("rawId", decode.string)
+  use credential_type <- decode.field("type", decode.string)
+  use client_data_json <- decode.subfield(
+    ["response", "clientDataJSON"],
+    decode.string,
+  )
+  use authenticator_data <- decode.subfield(
+    ["response", "authenticatorData"],
+    decode.string,
+  )
+  use signature <- decode.subfield(["response", "signature"], decode.string)
+  use user_handle <- decode.then(decode.optionally_at(
+    ["response", "userHandle"],
+    option.None,
+    decode.optional(decode.string),
+  ))
+  decode.success(
+    Response(ParsedResponse(
+      raw_id:,
+      credential_id:,
+      credential_type:,
+      client_data_json:,
+      authenticator_data:,
+      signature:,
+      user_handle:,
+    )),
+  )
+}
+
+/// Parse a raw response JSON string into a `Response`. Use when the
+/// response is the entire request body. For envelope shapes use
+/// [`response_decoder`](#response_decoder) inside your own decoder.
+pub fn parse_response_json(response_json: String) -> Result(Response, Error) {
+  json.parse(response_json, response_decoder())
+  |> result.replace_error(ParseError("Invalid authentication response JSON"))
+}
+
+/// Extract the credential id and optional user handle for lookup (discoverable flow).
 ///
-/// Call this first, look up the stored credential, then call verify().
-pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
-  use response <- result.try(parse_response_json(response_json))
+/// Once you have a parsed `Response`, call this to look up the stored
+/// credential before passing the same `Response` to [`verify`](#verify).
+pub fn response_info(response: Response) -> Result(ResponseInfo, Error) {
+  let parsed = response.parsed
   use raw_id <- result.try(
-    wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
+    wrap_error(internal.decode_base64url(parsed.raw_id, "rawId")),
   )
   use credential_id_bytes <- result.try(
-    wrap_error(internal.decode_base64url(response.credential_id, "id")),
+    wrap_error(internal.decode_base64url(parsed.credential_id, "id")),
   )
   use <- bool.guard(
     when: credential_id_bytes != raw_id,
     return: Error(VerificationMismatch(glasslock.CredentialIdField)),
   )
 
-  internal.decode_optional_base64url(response.user_handle, "userHandle")
+  internal.decode_optional_base64url(parsed.user_handle, "userHandle")
   |> result.map(ResponseInfo(raw_id, _))
   |> wrap_error
 }
 
+/// Convenience wrapper around `parse_response_json` +
+/// [`response_info`](#response_info) for callers whose response arrives as a
+/// raw string. Use during the discoverable flow to look up the stored
+/// credential before calling [`verify_json`](#verify_json).
+pub fn parse_response(response_json: String) -> Result(ResponseInfo, Error) {
+  parse_response_json(response_json) |> result.try(response_info)
+}
+
 /// Verify a challenge response from the browser.
 ///
-/// Takes the JSON response string from the browser, the challenge from `request()`,
-/// and the stored credential to verify against.
+/// Takes a parsed `Response` (from [`response_decoder`](#response_decoder) or
+/// [`parse_response_json`](#parse_response_json)), the challenge from
+/// `build()`, and the stored credential to verify against.
 ///
-/// For discoverable flow: call `parse_response()` first to get credential_id for lookup.
+/// For discoverable flow: call [`response_info`](#response_info) first to get
+/// credential_id for lookup.
 ///
 /// Returns an updated credential with the new sign count on success.
 pub fn verify(
-  response_json response_json: String,
+  response response: Response,
   challenge challenge: Challenge,
   stored stored: glasslock.Credential,
 ) -> Result(glasslock.Credential, Error) {
-  use response <- result.try(parse_response_json(response_json))
+  let response = response.parsed
 
   use raw_id <- result.try(
     wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
@@ -506,38 +568,16 @@ pub fn verify(
   Ok(glasslock.Credential(..stored, sign_count: auth_data.sign_count))
 }
 
-fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
-  let decoder = {
-    use credential_id <- decode.field("id", decode.string)
-    use raw_id <- decode.field("rawId", decode.string)
-    use credential_type <- decode.field("type", decode.string)
-    use client_data_json <- decode.subfield(
-      ["response", "clientDataJSON"],
-      decode.string,
-    )
-    use authenticator_data <- decode.subfield(
-      ["response", "authenticatorData"],
-      decode.string,
-    )
-    use signature <- decode.subfield(["response", "signature"], decode.string)
-    use user_handle <- decode.then(decode.optionally_at(
-      ["response", "userHandle"],
-      option.None,
-      decode.optional(decode.string),
-    ))
-    decode.success(ParsedResponse(
-      raw_id:,
-      credential_id:,
-      credential_type:,
-      client_data_json:,
-      authenticator_data:,
-      signature:,
-      user_handle:,
-    ))
-  }
-
-  json.parse(json_string, decoder)
-  |> result.replace_error(ParseError("Invalid authentication response JSON"))
+/// Convenience wrapper around [`verify`](#verify) for callers whose response
+/// arrives as a raw JSON string: parses with `parse_response_json` then
+/// verifies.
+pub fn verify_json(
+  response_json response_json: String,
+  challenge challenge: Challenge,
+  stored stored: glasslock.Credential,
+) -> Result(glasslock.Credential, Error) {
+  use response <- result.try(parse_response_json(response_json))
+  verify(response:, challenge:, stored:)
 }
 
 fn wrap_error(result: Result(a, internal.Error)) -> Result(a, Error) {

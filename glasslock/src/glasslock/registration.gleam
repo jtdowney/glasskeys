@@ -20,7 +20,7 @@
 //// // it back with `registration.parse_challenge`.
 ////
 //// // Verify the response
-//// case registration.verify(response_json:, challenge:) {
+//// case registration.verify_json(response_json:, challenge:) {
 ////   Ok(credential) -> todo as "store credential"
 ////   Error(e) -> todo as "handle error"
 //// }
@@ -127,6 +127,14 @@ pub opaque type Builder {
 /// A finalized registration challenge ready for verification.
 pub opaque type Challenge {
   Challenge(data: internal.ChallengeData, algorithms: List(Algorithm))
+}
+
+/// A parsed registration response. Construct via `response_decoder()`
+/// (when the response arrives nested in a larger JSON envelope) or
+/// `parse_response_json` (when you have a raw response string). Pass to
+/// [`verify`](#verify).
+pub opaque type Response {
+  Response(parsed: ParsedResponse)
 }
 
 type ParsedResponse {
@@ -467,15 +475,57 @@ fn resident_key_to_string(resident_key: ResidentKey) -> String {
   }
 }
 
-/// Verify a response JSON from the browser.
+/// Decoder for a registration response. Use when the response arrives
+/// nested in a larger JSON envelope (e.g. `{"response": <PublicKeyCredentialJSON>}`).
+/// Combine with `gleam/dynamic/decode` to extract the response and pass to
+/// [`verify`](#verify).
+pub fn response_decoder() -> decode.Decoder(Response) {
+  use credential_id <- decode.field("id", decode.string)
+  use raw_id <- decode.field("rawId", decode.string)
+  use credential_type <- decode.field("type", decode.string)
+  use client_data_json <- decode.subfield(
+    ["response", "clientDataJSON"],
+    decode.string,
+  )
+  use attestation_object <- decode.subfield(
+    ["response", "attestationObject"],
+    decode.string,
+  )
+  use transports <- decode.then(decode.optionally_at(
+    ["response", "transports"],
+    [],
+    decode.list(decode.string),
+  ))
+  decode.success(
+    Response(ParsedResponse(
+      raw_id:,
+      credential_id:,
+      credential_type:,
+      client_data_json:,
+      attestation_object:,
+      transports:,
+    )),
+  )
+}
+
+/// Parse a raw response JSON string into a `Response`. Use when the
+/// response is the entire request body. For envelope shapes use
+/// [`response_decoder`](#response_decoder) inside your own decoder.
+pub fn parse_response_json(response_json: String) -> Result(Response, Error) {
+  json.parse(response_json, response_decoder())
+  |> result.replace_error(ParseError("Invalid registration response JSON"))
+}
+
+/// Verify a response from the browser.
 ///
-/// Takes the JSON response string from the browser and the challenge from `request()`.
-/// Returns the verified credential on success.
+/// Takes a parsed `Response` (from [`response_decoder`](#response_decoder) or
+/// [`parse_response_json`](#parse_response_json)) and the challenge from
+/// `build()`. Returns the verified credential on success.
 pub fn verify(
-  response_json response_json: String,
+  response response: Response,
   challenge challenge: Challenge,
 ) -> Result(glasslock.Credential, Error) {
-  use response <- result.try(parse_response_json(response_json))
+  let response = response.parsed
 
   use raw_id <- result.try(
     wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
@@ -582,36 +632,15 @@ pub fn verify(
   ))
 }
 
-fn parse_response_json(json_string: String) -> Result(ParsedResponse, Error) {
-  let decoder = {
-    use credential_id <- decode.field("id", decode.string)
-    use raw_id <- decode.field("rawId", decode.string)
-    use credential_type <- decode.field("type", decode.string)
-    use client_data_json <- decode.subfield(
-      ["response", "clientDataJSON"],
-      decode.string,
-    )
-    use attestation_object <- decode.subfield(
-      ["response", "attestationObject"],
-      decode.string,
-    )
-    use transports <- decode.then(decode.optionally_at(
-      ["response", "transports"],
-      [],
-      decode.list(decode.string),
-    ))
-    decode.success(ParsedResponse(
-      raw_id:,
-      credential_id:,
-      credential_type:,
-      client_data_json:,
-      attestation_object:,
-      transports:,
-    ))
-  }
-
-  json.parse(json_string, decoder)
-  |> result.replace_error(ParseError("Invalid registration response JSON"))
+/// Convenience wrapper around [`verify`](#verify) for callers whose response
+/// arrives as a raw JSON string: parses with `parse_response_json` then
+/// verifies.
+pub fn verify_json(
+  response_json response_json: String,
+  challenge challenge: Challenge,
+) -> Result(glasslock.Credential, Error) {
+  use response <- result.try(parse_response_json(response_json))
+  verify(response:, challenge:)
 }
 
 fn wrap_error(result: Result(a, internal.Error)) -> Result(a, Error) {

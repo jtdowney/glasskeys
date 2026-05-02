@@ -4,6 +4,7 @@ import frontend/router
 import frontend/view
 import glasskey
 import gleam/javascript/promise.{type Promise}
+import gleam/json.{type Json}
 import gleam/option
 import gleam/result
 import gleam/uri.{type Uri}
@@ -389,7 +390,7 @@ fn start_conditional(
 }
 
 fn await_conditional_authentication_effect(
-  result: Promise(Result(String, glasskey.Error)),
+  result: Promise(Result(Json, glasskey.Error)),
 ) -> Effect(model.LoginMsg) {
   effect.from(fn(dispatch) {
     result

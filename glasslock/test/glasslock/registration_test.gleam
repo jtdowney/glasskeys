@@ -172,7 +172,7 @@ pub fn verify_valid_registration_test() {
   let response = testing.build_registration_response(challenge:)
   let response_json = testing.to_registration_json(response)
 
-  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(cred) = registration.verify_json(response_json:, challenge:)
   assert cred.id == response.credential_id
   assert cred.sign_count == 0
   let glasslock.PublicKey(raw_public_key) = cred.public_key
@@ -192,7 +192,7 @@ pub fn verify_stores_reported_transports_test() {
       id_override: option.None,
     )
 
-  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(cred) = registration.verify_json(response_json:, challenge:)
   assert cred.transports == [glasslock.TransportUsb, glasslock.TransportHybrid]
 }
 
@@ -201,7 +201,7 @@ pub fn verify_defaults_transports_to_empty_when_field_missing_test() {
   let response = testing.build_registration_response(challenge:)
   let response_json = testing.to_registration_json(response)
 
-  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(cred) = registration.verify_json(response_json:, challenge:)
   assert cred.transports == []
 }
 
@@ -241,13 +241,14 @@ pub fn verify_drops_unknown_transport_strings_test() {
     ])
     |> json.to_string
 
-  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(cred) = registration.verify_json(response_json:, challenge:)
   assert cred.transports == [glasslock.TransportUsb, glasslock.TransportHybrid]
 }
 
 pub fn verify_rejects_invalid_json_test() {
   let challenge = setup_challenge()
-  let result = registration.verify(response_json: "{not valid json", challenge:)
+  let result =
+    registration.verify_json(response_json: "{not valid json", challenge:)
   assert result
     == Error(registration.ParseError("Invalid registration response JSON"))
 }
@@ -272,7 +273,7 @@ pub fn verify_rejects_wrong_type_test() {
       ),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result == Error(registration.VerificationMismatch(glasslock.TypeField))
 }
 
@@ -294,7 +295,7 @@ pub fn verify_rejects_challenge_mismatch_test() {
       ),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.ChallengeField))
 }
@@ -317,7 +318,7 @@ pub fn verify_rejects_origin_mismatch_test() {
       ),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.OriginField))
 }
@@ -333,7 +334,7 @@ pub fn verify_rejects_when_verification_required_but_not_performed_test() {
         user_verified: False,
       ),
     )
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result == Error(registration.UserVerificationFailed)
 }
 
@@ -345,7 +346,7 @@ pub fn verify_succeeds_when_verification_required_and_performed_test() {
       challenge:,
       flags: testing.AuthenticatorFlags(user_present: True, user_verified: True),
     )
-  let assert Ok(cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(cred) = registration.verify_json(response_json:, challenge:)
   assert cred.sign_count == 0
 }
 
@@ -359,7 +360,7 @@ pub fn verify_rejects_user_presence_not_asserted_test() {
         user_verified: False,
       ),
     )
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result == Error(registration.UserPresenceFailed)
 }
 
@@ -392,7 +393,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
       id_override: option.None,
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.RelyingPartyIdField))
 }
@@ -415,7 +416,7 @@ pub fn verify_rejects_cross_origin_when_disabled_test() {
       ),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.CrossOriginField))
 }
@@ -442,7 +443,7 @@ pub fn verify_succeeds_with_cross_origin_allowed_test() {
       ),
     )
 
-  let assert Ok(_cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(_cred) = registration.verify_json(response_json:, challenge:)
 }
 
 pub fn verify_accepts_allowed_top_origin_test() {
@@ -466,7 +467,7 @@ pub fn verify_accepts_allowed_top_origin_test() {
       testing.RegistrationResponse(..response, client_data_json:),
     )
 
-  let assert Ok(_cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(_cred) = registration.verify_json(response_json:, challenge:)
 }
 
 pub fn verify_rejects_unknown_top_origin_test() {
@@ -490,7 +491,7 @@ pub fn verify_rejects_unknown_top_origin_test() {
       testing.RegistrationResponse(..response, client_data_json:),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.TopOriginField))
 }
@@ -516,7 +517,7 @@ pub fn verify_accepts_missing_top_origin_with_allowlist_test() {
       testing.RegistrationResponse(..response, client_data_json:),
     )
 
-  let assert Ok(_cred) = registration.verify(response_json:, challenge:)
+  let assert Ok(_cred) = registration.verify_json(response_json:, challenge:)
 }
 
 pub fn verify_rejects_top_origin_without_cross_origin_test() {
@@ -536,7 +537,7 @@ pub fn verify_rejects_top_origin_without_cross_origin_test() {
       testing.RegistrationResponse(..response, client_data_json:),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.TopOriginField))
 }
@@ -554,7 +555,7 @@ pub fn verify_rejects_invalid_credential_type_test() {
       id_override: option.None,
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.CredentialTypeField))
 }
@@ -574,7 +575,7 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
       id_override: option.Some(mismatched_id_b64),
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.VerificationMismatch(glasslock.CredentialIdField))
 }
@@ -609,7 +610,7 @@ pub fn verify_rejects_non_empty_attestation_statement_test() {
       id_override: option.None,
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.InvalidAttestation(
       "none attestation with non-empty statement",
@@ -647,7 +648,7 @@ pub fn verify_rejects_unsupported_attestation_format_test() {
       id_override: option.None,
     )
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.InvalidAttestation("unsupported format: fido-u2f"))
 }
@@ -660,7 +661,7 @@ pub fn verify_rejects_credential_algorithm_not_requested_test() {
   let response = testing.build_registration_response(challenge:)
   let response_json = testing.to_registration_json(response)
 
-  let result = registration.verify(response_json:, challenge:)
+  let result = registration.verify_json(response_json:, challenge:)
   assert result
     == Error(registration.UnsupportedKey(
       "credential algorithm does not match requested algorithms",
@@ -749,7 +750,8 @@ pub fn decoded_challenge_drives_verify_test() {
       keypair: testing.generate_es256_keypair(),
     )
   let response_json = testing.to_registration_json(response)
-  let assert Ok(_) = registration.verify(response_json:, challenge: decoded)
+  let assert Ok(_) =
+    registration.verify_json(response_json:, challenge: decoded)
 }
 
 pub fn decode_rejects_authentication_blob_test() {

@@ -37,7 +37,7 @@ import gleam/bool
 import gleam/dynamic/decode
 import gleam/javascript/array
 import gleam/javascript/promise.{type Promise}
-import gleam/json
+import gleam/json.{type Json}
 import gleam/list
 import gleam/option.{type Option}
 import gleam/result
@@ -146,7 +146,7 @@ pub type AuthenticatorAttachment {
 /// the pending ceremony.
 pub type ConditionalAuthentication {
   ConditionalAuthentication(
-    result: Promise(Result(String, Error)),
+    result: Promise(Result(Json, Error)),
     abort: fn() -> Nil,
   )
 }
@@ -264,12 +264,12 @@ type User {
 ///
 /// Takes options parsed with [`authentication_options_decoder`](#authentication_options_decoder),
 /// then calls `navigator.credentials.get`. Returns a promise resolving to the
-/// assertion response JSON on success. The returned string is the exact shape
-/// glasslock's `authentication.verify` expects. Pass it through unchanged
-/// rather than decoding and re-encoding.
+/// assertion response as a `Json` value. Stringify with `json.to_string`
+/// before sending to glasslock's `authentication.verify`, or embed under a
+/// key in a larger envelope.
 pub fn start_authentication(
   options: AuthenticationOptions,
-) -> Promise(Result(String, Error)) {
+) -> Promise(Result(Json, Error)) {
   use <- bool.guard(
     when: !supports_webauthn(),
     return: promise.resolve(Error(NotSupported)),
@@ -346,7 +346,7 @@ pub fn supports_webauthn_autofill() -> Promise(Bool)
 
 fn encode_authentication_response(
   credential: AuthenticationCredential,
-) -> String {
+) -> Json {
   let base_fields = [
     #("clientDataJSON", b64_json(credential.client_data_json)),
     #("authenticatorData", b64_json(credential.authenticator_data)),
@@ -363,10 +363,9 @@ fn encode_authentication_response(
     #("type", json.string("public-key")),
     #("response", json.object(response_fields)),
   ])
-  |> json.to_string
 }
 
-fn encode_registration_response(credential: RegistrationCredential) -> String {
+fn encode_registration_response(credential: RegistrationCredential) -> Json {
   let response_fields = [
     #("clientDataJSON", b64_json(credential.client_data_json)),
     #("attestationObject", b64_json(credential.attestation_object)),
@@ -385,10 +384,9 @@ fn encode_registration_response(credential: RegistrationCredential) -> String {
     #("type", json.string("public-key")),
     #("response", json.object(response_fields)),
   ])
-  |> json.to_string
 }
 
-fn b64_json(bytes: BitArray) -> json.Json {
+fn b64_json(bytes: BitArray) -> Json {
   json.string(bit_array.base64_url_encode(bytes, False))
 }
 
@@ -594,12 +592,12 @@ fn requirement_decoder() -> decode.Decoder(Requirement) {
 ///
 /// Takes options parsed with [`registration_options_decoder`](#registration_options_decoder),
 /// then calls `navigator.credentials.create`. Returns a promise resolving to
-/// the credential response JSON on success. The returned string is the exact
-/// shape glasslock's `registration.verify` expects. Pass it through unchanged
-/// rather than decoding and re-encoding.
+/// the credential response as a `Json` value. Stringify with
+/// `json.to_string` before sending to glasslock's `registration.verify`, or
+/// embed under a key in a larger envelope.
 pub fn start_registration(
   options: RegistrationOptions,
-) -> Promise(Result(String, Error)) {
+) -> Promise(Result(Json, Error)) {
   use <- bool.guard(
     when: !supports_webauthn(),
     return: promise.resolve(Error(NotSupported)),

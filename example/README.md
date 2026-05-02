@@ -42,6 +42,19 @@ The backend reads these environment variables, falling back to demo defaults:
 | `ORIGINS`    | `http://localhost:1234,http://localhost:5173` | Comma-separated allow-list matched against `clientDataJSON.origin` |
 | `SECRET_KEY` | random 64-char string per process start       | Used to sign the registration/authentication cookies               |
 
+## API contract
+
+The backend exposes four endpoints under `/api`:
+
+| Endpoint                      | Request body                                                   | Response body                                           |
+| ----------------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
+| `POST /api/register/begin`    | `{"username": "<name>"}`                                       | `{"options": <PublicKeyCredentialCreationOptionsJSON>}` |
+| `POST /api/register/complete` | `{"response": <PublicKeyCredentialJSON>}`                      | `{"verified": true}`                                    |
+| `POST /api/login/begin`       | `{"username": "<name>"}` (omit or empty for discoverable flow) | `{"options": <PublicKeyCredentialRequestOptionsJSON>}`  |
+| `POST /api/login/complete`    | `{"response": <PublicKeyCredentialJSON>}`                      | `{"verified": true, "username": "<name>"}`              |
+
+The `response` field on the `*/complete` endpoints is the WebAuthn response object as returned by `navigator.credentials.create` / `.get` (already in the shape produced by `PublicKeyCredential.toJSON()`). The backend uses `glasslock`'s `response_decoder()` to extract it from the envelope and pass straight to `verify` — no re-serialization. Both frontends post it as a nested object: see `frontends/svelte/src/lib/api.js` and `frontends/lustre/src/frontend/api.gleam`.
+
 ## Production caveats
 
 These apps are intentionally simple. Before adapting any of this for production, account for the following.

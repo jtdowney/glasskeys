@@ -719,7 +719,8 @@ pub fn start_registration_succeeds_with_credential_test() {
     glasskey.start_registration(default_registration_options()),
   )
 
-  let assert Ok(json_string) = result
+  let assert Ok(json_value) = result
+  let json_string = json.to_string(json_value)
   let decoder = {
     use raw_id <- decode.field("rawId", decode.string)
     use client_data_json <- decode.subfield(
@@ -754,7 +755,8 @@ pub fn start_registration_includes_transports_when_authenticator_reports_them_te
     glasskey.start_registration(default_registration_options()),
   )
 
-  let assert Ok(json_string) = result
+  let assert Ok(json_value) = result
+  let json_string = json.to_string(json_value)
   let decoder = {
     use transports <- decode.subfield(
       ["response", "transports"],
@@ -781,7 +783,8 @@ pub fn start_registration_omits_transports_when_authenticator_reports_none_test(
     glasskey.start_registration(default_registration_options()),
   )
 
-  let assert Ok(json_string) = result
+  let assert Ok(json_value) = result
+  let json_string = json.to_string(json_value)
   let decoder = {
     use transports <- decode.then(decode.optionally_at(
       ["response", "transports"],
@@ -1033,7 +1036,8 @@ pub fn start_authentication_succeeds_with_user_handle_test() {
     glasskey.start_authentication(default_authentication_options()),
   )
 
-  let assert Ok(json_string) = result
+  let assert Ok(json_value) = result
+  let json_string = json.to_string(json_value)
   let decoder = {
     use raw_id <- decode.field("rawId", decode.string)
     use signature <- decode.subfield(["response", "signature"], decode.string)
@@ -1066,7 +1070,8 @@ pub fn start_authentication_omits_user_handle_when_missing_test() {
     glasskey.start_authentication(default_authentication_options()),
   )
 
-  let assert Ok(json_string) = result
+  let assert Ok(json_value) = result
+  let json_string = json.to_string(json_value)
   let decoder = {
     use user_handle <- decode.then(decode.optionally_at(
       ["response", "userHandle"],

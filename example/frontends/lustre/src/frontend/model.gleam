@@ -1,5 +1,6 @@
 import frontend/router
 import glasskey
+import gleam/json.{type Json}
 import gleam/uri.{type Uri}
 
 pub type Model {
@@ -54,7 +55,7 @@ pub type RegisterBeginningMsg {
 }
 
 pub type RegisterAwaitingMsg {
-  AuthenticatorFinishedRegistration(Result(String, glasskey.Error))
+  AuthenticatorFinishedRegistration(Result(Json, glasskey.Error))
 }
 
 pub type RegisterVerifyingMsg {
@@ -85,11 +86,11 @@ pub type LoginModalBeginningMsg {
 }
 
 pub type LoginModalAwaitingMsg {
-  AuthenticatorFinishedLogin(Result(String, glasskey.Error))
+  AuthenticatorFinishedLogin(Result(Json, glasskey.Error))
 }
 
 pub type LoginConditionalMsg {
-  AuthenticatorFinishedConditionalLogin(Result(String, glasskey.Error))
+  AuthenticatorFinishedConditionalLogin(Result(Json, glasskey.Error))
 }
 
 pub type LoginVerifyingMsg {

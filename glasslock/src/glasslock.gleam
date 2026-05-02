@@ -26,7 +26,7 @@
 //// // `registration.encode_challenge` and recover with
 //// // `registration.parse_challenge`.
 ////
-//// case registration.verify(response_json:, challenge:) {
+//// case registration.verify_json(response_json:, challenge:) {
 ////   Ok(credential) -> todo as "store credential.id, credential.public_key, sign_count"
 ////   Error(e) -> todo as "handle error"
 //// }
@@ -49,7 +49,7 @@
 //// // `authentication.encode_challenge` and recover with
 //// // `authentication.parse_challenge`.
 ////
-//// case authentication.verify(response_json:, challenge:, stored: stored_credential) {
+//// case authentication.verify_json(response_json:, challenge:, stored: stored_credential) {
 ////   Ok(updated_credential) -> todo as "update stored sign_count"
 ////   Error(e) -> todo as "handle error"
 //// }

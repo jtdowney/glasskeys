@@ -7,11 +7,6 @@
   let busy = $state(false);
   let username = $state("");
 
-  function isBenignAbort(err) {
-    const name = err?.name ?? "";
-    return name === "AbortError" || name === "NotAllowedError";
-  }
-
   function finishLogin(username) {
     sessionStorage.setItem("username", username);
     goto("/welcome");
@@ -25,7 +20,7 @@
         if (cancelled || !who) return;
         finishLogin(who);
       } catch (err) {
-        if (cancelled || isBenignAbort(err)) return;
+        if (cancelled) return;
         status = `Error: ${err.message ?? err}`;
       }
     })();

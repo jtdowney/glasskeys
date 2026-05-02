@@ -290,7 +290,11 @@ pub fn verify_valid_authentication_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.id == stored_credential.id
   assert cred.sign_count == 1
   assert cred.public_key == stored_credential.public_key
@@ -315,7 +319,11 @@ pub fn verify_valid_authentication_ed25519_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 1
 }
 
@@ -323,7 +331,7 @@ pub fn verify_rejects_invalid_json_test() {
   let #(challenge, stored_credential, _keypair) = setup_authentication()
 
   let result =
-    authentication.verify(
+    authentication.verify_json(
       response_json: "{not valid json",
       challenge:,
       stored: stored_credential,
@@ -354,7 +362,11 @@ pub fn verify_rejects_wrong_type_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.TypeField))
 }
@@ -378,7 +390,11 @@ pub fn verify_rejects_challenge_mismatch_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.ChallengeField))
 }
@@ -402,7 +418,11 @@ pub fn verify_rejects_origin_mismatch_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.OriginField))
 }
@@ -427,7 +447,11 @@ pub fn verify_rejects_credential_not_allowed_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.CredentialNotAllowed)
 }
 
@@ -451,7 +475,11 @@ pub fn verify_rejects_credential_id_mismatch_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.CredentialNotAllowed)
 }
 
@@ -494,7 +522,11 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
     |> json.to_string
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.CredentialIdField))
 }
@@ -525,7 +557,7 @@ pub fn verify_rejects_unsupported_stored_public_key_test() {
     )
 
   let result =
-    authentication.verify(
+    authentication.verify_json(
       response_json:,
       challenge:,
       stored: stored_with_unsupported_key,
@@ -551,7 +583,11 @@ pub fn verify_rejects_invalid_signature_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.InvalidSignature)
 }
 
@@ -571,7 +607,11 @@ pub fn verify_rejects_sign_count_regression_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.SignCountRegression)
 }
 
@@ -591,7 +631,11 @@ pub fn verify_rejects_sign_count_reset_to_zero_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.SignCountRegression)
 }
 
@@ -617,7 +661,11 @@ pub fn verify_rejects_when_verification_required_but_not_performed_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.UserVerificationFailed)
 }
 
@@ -640,7 +688,11 @@ pub fn verify_succeeds_when_verification_required_and_performed_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 1
 }
 
@@ -660,7 +712,11 @@ pub fn verify_rejects_user_presence_not_asserted_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result == Error(authentication.UserPresenceFailed)
 }
 
@@ -697,7 +753,11 @@ pub fn verify_rejects_rp_id_mismatch_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.RelyingPartyIdField))
 }
@@ -737,7 +797,11 @@ pub fn verify_rejects_at_flag_in_authentication_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.ParseError(
       "AT flag should not be set in authentication",
@@ -763,7 +827,11 @@ pub fn verify_rejects_cross_origin_when_disabled_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.CrossOriginField))
 }
@@ -790,7 +858,11 @@ pub fn verify_succeeds_with_cross_origin_allowed_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 1
 }
 
@@ -822,7 +894,11 @@ pub fn verify_accepts_allowed_top_origin_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 1
 }
 
@@ -854,7 +930,11 @@ pub fn verify_rejects_unknown_top_origin_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.TopOriginField))
 }
@@ -887,7 +967,11 @@ pub fn verify_accepts_missing_top_origin_with_allowlist_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 1
 }
 
@@ -912,7 +996,11 @@ pub fn verify_rejects_top_origin_without_cross_origin_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.TopOriginField))
 }
@@ -934,7 +1022,11 @@ pub fn verify_sign_count_zero_stored_allows_any_new_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 999_999
 }
 
@@ -951,7 +1043,11 @@ pub fn verify_both_sign_counts_zero_succeeds_test() {
     )
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 0
 }
 
@@ -972,7 +1068,11 @@ pub fn verify_rejects_invalid_credential_type_test() {
     )
 
   let result =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert result
     == Error(authentication.VerificationMismatch(glasslock.CredentialTypeField))
 }
@@ -999,7 +1099,11 @@ pub fn verify_discoverable_flow_test() {
   assert info.credential_id == stored_credential.id
 
   let assert Ok(cred) =
-    authentication.verify(response_json:, challenge:, stored: stored_credential)
+    authentication.verify_json(
+      response_json:,
+      challenge:,
+      stored: stored_credential,
+    )
   assert cred.sign_count == 1
 }
 
@@ -1123,7 +1227,7 @@ pub fn sign_count_monotonicity_test() {
     )
 
   let result =
-    authentication.verify(
+    authentication.verify_json(
       response_json: response_json,
       challenge: challenge,
       stored: stored_cred,
@@ -1241,7 +1345,7 @@ pub fn decoded_challenge_drives_verify_test() {
       user_handle: option.None,
     )
   let assert Ok(_) =
-    authentication.verify(
+    authentication.verify_json(
       response_json:,
       challenge: decoded,
       stored: stored_credential,

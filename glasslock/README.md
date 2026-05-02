@@ -34,7 +34,7 @@ let #(options_json, challenge) =
 // (returns a JSON string) and hydrate with `registration.parse_challenge`.
 
 // 2. Verify the browser's response
-case registration.verify(response_json:, challenge:) {
+case registration.verify_json(response_json:, challenge:) {
   Ok(credential) -> {
     // Store credential.id, credential.public_key, and credential.sign_count
     Ok(credential)
@@ -62,7 +62,7 @@ let #(options_json, challenge) =
 // (returns a JSON string) and hydrate with `authentication.parse_challenge`.
 
 // 2. Verify the browser's response
-case authentication.verify(response_json:, challenge:, stored: stored_credential) {
+case authentication.verify_json(response_json:, challenge:, stored: stored_credential) {
   Ok(updated_credential) -> {
     // Update the stored sign_count to detect cloned authenticators
     Ok(updated_credential)
@@ -80,7 +80,7 @@ case authentication.parse_response(response_json) {
   Ok(info) -> {
     // Look up stored credential by info.credential_id or info.user_handle
     case lookup_credential(info.credential_id) {
-      Ok(stored) -> authentication.verify(response_json:, challenge:, stored:)
+      Ok(stored) -> authentication.verify_json(response_json:, challenge:, stored:)
       Error(_) -> todo as "handle lookup error"
     }
   }

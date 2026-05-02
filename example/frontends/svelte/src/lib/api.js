@@ -19,7 +19,7 @@ async function postJson(path, body) {
 
 async function completeLogin(response) {
   const { verified, username } = await postJson("/api/login/complete", {
-    response: JSON.stringify(response),
+    response,
   });
   if (!verified) throw new Error("authentication not verified");
   return username;
@@ -28,9 +28,7 @@ async function completeLogin(response) {
 export async function register(username) {
   const { options } = await postJson("/api/register/begin", { username });
   const response = await startRegistration({ optionsJSON: options });
-  const { verified } = await postJson("/api/register/complete", {
-    response: JSON.stringify(response),
-  });
+  const { verified } = await postJson("/api/register/complete", { response });
   if (!verified) throw new Error("registration not verified");
 }
 
