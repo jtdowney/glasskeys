@@ -459,53 +459,10 @@ pub fn verify(
 ) -> Result(glasslock.Credential, Error) {
   let response = response.parsed
 
-  use raw_id <- result.try(
-    wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
+  use #(raw_id, client_data_json, authenticator_data, signature) <- result.try(
+    decode_response_credential(response),
   )
-  use credential_id_bytes <- result.try(
-    wrap_error(internal.decode_base64url(response.credential_id, "id")),
-  )
-  use <- bool.guard(
-    when: credential_id_bytes != raw_id,
-    return: Error(VerificationMismatch(glasslock.CredentialIdField)),
-  )
-  use client_data_json <- result.try(
-    wrap_error(internal.decode_base64url(
-      response.client_data_json,
-      "clientDataJSON",
-    )),
-  )
-  use authenticator_data <- result.try(
-    wrap_error(internal.decode_base64url(
-      response.authenticator_data,
-      "authenticatorData",
-    )),
-  )
-  use signature <- result.try(
-    wrap_error(internal.decode_base64url(response.signature, "signature")),
-  )
-
-  use <- bool.guard(
-    when: response.credential_type != "public-key",
-    return: Error(VerificationMismatch(glasslock.CredentialTypeField)),
-  )
-
-  // When `allow_credentials` is non-empty the presented ID must appear
-  // in it; separately, the presented ID must match the stored credential
-  // the caller looked up. Both are required: the allow-list enforces the
-  // RP's policy, and the stored-ID match prevents using one credential's
-  // response to authenticate as another.
-  use <- bool.guard(
-    when: !list.is_empty(challenge.allowed_credentials)
-      && !list.any(challenge.allowed_credentials, fn(entry) {
-      entry.0 == raw_id
-    }),
-    return: Error(CredentialNotAllowed),
-  )
-  use <- bool.guard(
-    when: raw_id != stored.id,
-    return: Error(CredentialNotAllowed),
-  )
+  use _ <- result.try(check_credential_allowed(challenge, stored, raw_id))
 
   use client_data <- result.try(
     wrap_error(internal.parse_client_data(client_data_json)),
@@ -555,17 +512,80 @@ pub fn verify(
     )),
   )
 
-  // Sign count 0 means the authenticator does not track signature counts.
-  // Accept any new value when stored is 0. Reject when new drops to 0 but
-  // stored was non-zero (possible cloned key).
-  let sign_count_ok = case stored.sign_count, auth_data.sign_count {
-    0, _ -> True
-    _, 0 -> False
-    _, _ -> auth_data.sign_count > stored.sign_count
-  }
-  use <- bool.guard(when: !sign_count_ok, return: Error(SignCountRegression))
+  use _ <- result.try(check_sign_count(stored.sign_count, auth_data.sign_count))
 
   Ok(glasslock.Credential(..stored, sign_count: auth_data.sign_count))
+}
+
+fn decode_response_credential(
+  response: ParsedResponse,
+) -> Result(#(BitArray, BitArray, BitArray, BitArray), Error) {
+  use raw_id <- result.try(
+    wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
+  )
+  use credential_id_bytes <- result.try(
+    wrap_error(internal.decode_base64url(response.credential_id, "id")),
+  )
+  use <- bool.guard(
+    when: credential_id_bytes != raw_id,
+    return: Error(VerificationMismatch(glasslock.CredentialIdField)),
+  )
+  use client_data_json <- result.try(
+    wrap_error(internal.decode_base64url(
+      response.client_data_json,
+      "clientDataJSON",
+    )),
+  )
+  use authenticator_data <- result.try(
+    wrap_error(internal.decode_base64url(
+      response.authenticator_data,
+      "authenticatorData",
+    )),
+  )
+  use signature <- result.try(
+    wrap_error(internal.decode_base64url(response.signature, "signature")),
+  )
+
+  use <- bool.guard(
+    when: response.credential_type != "public-key",
+    return: Error(VerificationMismatch(glasslock.CredentialTypeField)),
+  )
+
+  Ok(#(raw_id, client_data_json, authenticator_data, signature))
+}
+
+fn check_credential_allowed(
+  challenge: Challenge,
+  stored: glasslock.Credential,
+  raw_id: BitArray,
+) -> Result(Nil, Error) {
+  use <- bool.guard(
+    when: !list.is_empty(challenge.allowed_credentials)
+      && !list.any(challenge.allowed_credentials, fn(entry) {
+      entry.0 == raw_id
+    }),
+    return: Error(CredentialNotAllowed),
+  )
+  use <- bool.guard(
+    when: raw_id != stored.id,
+    return: Error(CredentialNotAllowed),
+  )
+  Ok(Nil)
+}
+
+// Sign count 0 means the authenticator does not track signature counts. Accept
+// any new value when stored is 0. Reject when new drops to 0 but stored was
+// non-zero (possible cloned key).
+fn check_sign_count(stored: Int, new: Int) -> Result(Nil, Error) {
+  let ok = case stored, new {
+    0, _ -> True
+    _, 0 -> False
+    _, _ -> new > stored
+  }
+  case ok {
+    True -> Ok(Nil)
+    False -> Error(SignCountRegression)
+  }
 }
 
 /// Convenience wrapper around [`verify`](#verify) for callers whose response

@@ -414,11 +414,11 @@ pub fn build_attestation_object_with_non_empty_attstmt(
 }
 
 /// Build authenticator data for registration (includes attested credential).
-/// Pass `cose_key(keypair)` for the COSE key parameter.
+/// Pass `cose_key(keypair)` for the `cose_key_cbor` parameter.
 pub fn build_registration_authenticator_data(
   relying_party_id relying_party_id: String,
   credential_id credential_id: BitArray,
-  cose_key cose_key: BitArray,
+  cose_key_cbor cose_key_cbor: BitArray,
   flags flags: AuthenticatorFlags,
   sign_count sign_count: Int,
 ) -> BitArray {
@@ -435,7 +435,7 @@ pub fn build_registration_authenticator_data(
     aaguid,
     <<cred_id_len:size(16)>>,
     credential_id,
-    cose_key,
+    cose_key_cbor,
   ])
 }
 
@@ -468,7 +468,7 @@ pub fn build_registration_response_with_keypair(
     build_registration_authenticator_data(
       relying_party_id: data.rp_id,
       credential_id:,
-      cose_key: cose_key(keypair),
+      cose_key_cbor: cose_key(keypair),
       flags: default_flags(),
       sign_count: 0,
     )

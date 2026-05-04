@@ -527,6 +527,44 @@ pub fn verify(
 ) -> Result(glasslock.Credential, Error) {
   let response = response.parsed
 
+  use #(raw_id, client_data_json, attestation_object) <- result.try(
+    decode_response_credential(response),
+  )
+
+  use client_data <- result.try(
+    wrap_error(internal.parse_client_data(client_data_json)),
+  )
+  use _ <- result.try(
+    wrap_error(internal.verify_client_data(
+      client_data,
+      expected_type: "webauthn.create",
+      expected_challenge: challenge.data.bytes,
+      expected_origins: challenge.data.origins,
+      allow_cross_origin: challenge.data.allow_cross_origin,
+      allowed_top_origins: challenge.data.allowed_top_origins,
+    )),
+  )
+
+  use #(attested, sign_count) <- result.try(verify_attestation(
+    challenge,
+    raw_id,
+    attestation_object,
+  ))
+
+  Ok(glasslock.Credential(
+    id: attested.credential_id,
+    public_key: glasslock.PublicKey(attested.public_key_cbor),
+    sign_count: sign_count,
+    transports: list.filter_map(
+      response.transports,
+      internal.transport_from_string,
+    ),
+  ))
+}
+
+fn decode_response_credential(
+  response: ParsedResponse,
+) -> Result(#(BitArray, BitArray, BitArray), Error) {
   use raw_id <- result.try(
     wrap_error(internal.decode_base64url(response.raw_id, "rawId")),
   )
@@ -556,20 +594,14 @@ pub fn verify(
     return: Error(VerificationMismatch(glasslock.CredentialTypeField)),
   )
 
-  use client_data <- result.try(
-    wrap_error(internal.parse_client_data(client_data_json)),
-  )
-  use _ <- result.try(
-    wrap_error(internal.verify_client_data(
-      client_data,
-      expected_type: "webauthn.create",
-      expected_challenge: challenge.data.bytes,
-      expected_origins: challenge.data.origins,
-      allow_cross_origin: challenge.data.allow_cross_origin,
-      allowed_top_origins: challenge.data.allowed_top_origins,
-    )),
-  )
+  Ok(#(raw_id, client_data_json, attestation_object))
+}
 
+fn verify_attestation(
+  challenge: Challenge,
+  raw_id: BitArray,
+  attestation_object: BitArray,
+) -> Result(#(internal.AttestedCredential, Int), Error) {
   use attestation_obj <- result.try(
     wrap_error(internal.parse_attestation_object(attestation_object)),
   )
@@ -621,15 +653,7 @@ pub fn verify(
     )),
   )
 
-  Ok(glasslock.Credential(
-    id: attested.credential_id,
-    public_key: glasslock.PublicKey(attested.public_key_cbor),
-    sign_count: auth_data.sign_count,
-    transports: list.filter_map(
-      response.transports,
-      internal.transport_from_string,
-    ),
-  ))
+  Ok(#(attested, auth_data.sign_count))
 }
 
 /// Convenience wrapper around [`verify`](#verify) for callers whose response

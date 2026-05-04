@@ -189,21 +189,7 @@ fn clear_session(response: wisp.Response, req: wisp.Request) -> wisp.Response {
 
 fn describe_error(err: authentication.Error) -> String {
   case err {
-    authentication.VerificationMismatch(glasslock.TypeField) -> "type mismatch"
-    authentication.VerificationMismatch(glasslock.ChallengeField) ->
-      "challenge mismatch"
-    authentication.VerificationMismatch(glasslock.OriginField) ->
-      "origin mismatch"
-    authentication.VerificationMismatch(glasslock.RelyingPartyIdField) ->
-      "relying party id mismatch"
-    authentication.VerificationMismatch(glasslock.CrossOriginField) ->
-      "cross origin not allowed"
-    authentication.VerificationMismatch(glasslock.TopOriginField) ->
-      "top origin not allowed"
-    authentication.VerificationMismatch(glasslock.CredentialIdField) ->
-      "credential id mismatch"
-    authentication.VerificationMismatch(glasslock.CredentialTypeField) ->
-      "credential type mismatch"
+    authentication.VerificationMismatch(field) -> describe_field(field)
     authentication.UnsupportedKey(reason) -> "unsupported key: " <> reason
     authentication.ParseError(message) -> "parse error: " <> message
     authentication.InvalidSignature -> "invalid signature"
@@ -211,6 +197,19 @@ fn describe_error(err: authentication.Error) -> String {
     authentication.SignCountRegression -> "sign count regression"
     authentication.UserPresenceFailed -> "user presence failed"
     authentication.UserVerificationFailed -> "user verification failed"
+  }
+}
+
+fn describe_field(field: glasslock.VerificationField) -> String {
+  case field {
+    glasslock.TypeField -> "type mismatch"
+    glasslock.ChallengeField -> "challenge mismatch"
+    glasslock.OriginField -> "origin mismatch"
+    glasslock.RelyingPartyIdField -> "relying party id mismatch"
+    glasslock.CrossOriginField -> "cross origin not allowed"
+    glasslock.TopOriginField -> "top origin not allowed"
+    glasslock.CredentialIdField -> "credential id mismatch"
+    glasslock.CredentialTypeField -> "credential type mismatch"
   }
 }
 

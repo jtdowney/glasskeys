@@ -78,7 +78,7 @@ fn build_response(
     testing.build_registration_authenticator_data(
       relying_party_id: testing.registration_challenge_rp_id(challenge),
       credential_id:,
-      cose_key: testing.cose_key(keypair),
+      cose_key_cbor: testing.cose_key(keypair),
       flags:,
       sign_count: 0,
     )
@@ -373,7 +373,7 @@ pub fn verify_rejects_rp_id_mismatch_test() {
     testing.build_registration_authenticator_data(
       relying_party_id: "evil.com",
       credential_id:,
-      cose_key: testing.cose_key(keypair),
+      cose_key_cbor: testing.cose_key(keypair),
       flags: testing.default_flags(),
       sign_count: 0,
     )
@@ -588,7 +588,7 @@ pub fn verify_rejects_non_empty_attestation_statement_test() {
     testing.build_registration_authenticator_data(
       relying_party_id: testing.registration_challenge_rp_id(challenge),
       credential_id:,
-      cose_key: testing.cose_key(keypair),
+      cose_key_cbor: testing.cose_key(keypair),
       flags: testing.default_flags(),
       sign_count: 0,
     )
@@ -625,7 +625,7 @@ pub fn verify_rejects_unsupported_attestation_format_test() {
     testing.build_registration_authenticator_data(
       relying_party_id: testing.registration_challenge_rp_id(challenge),
       credential_id:,
-      cose_key: testing.cose_key(keypair),
+      cose_key_cbor: testing.cose_key(keypair),
       flags: testing.default_flags(),
       sign_count: 0,
     )

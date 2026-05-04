@@ -37,7 +37,7 @@ pub fn build_registration_auth_data_roundtrips_test() {
     testing.build_registration_authenticator_data(
       relying_party_id: "example.com",
       credential_id:,
-      cose_key: cose_key,
+      cose_key_cbor: cose_key,
       flags: flags,
       sign_count: 42,
     )
