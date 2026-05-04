@@ -9,6 +9,7 @@ import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
+import non_empty_list
 import wisp
 
 const session_cookie = "registration"
@@ -65,7 +66,6 @@ fn begin_registration(
     Error(_) -> {
       let user_id = crypto.strong_random_bytes(16)
 
-      let assert [first_origin, ..rest_origins] = ctx.origins
       // Resident key is required so the credential lives on the authenticator
       // and the demo can exercise the discoverable (passkey) sign-in flow.
       let builder =
@@ -79,12 +79,16 @@ fn begin_registration(
             name: username,
             display_name: username,
           ),
-          origin: first_origin,
+          origin: non_empty_list.first(ctx.origins),
         )
         |> registration.resident_key(registration.ResidentKeyRequired)
         |> registration.user_verification(glasslock.VerificationPreferred)
       let #(options_json, challenge) =
-        list.fold(rest_origins, builder, registration.origin)
+        list.fold(
+          non_empty_list.rest(ctx.origins),
+          builder,
+          registration.origin,
+        )
         |> registration.build()
 
       let pending =

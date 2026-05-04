@@ -7,6 +7,7 @@ import gleam/list
 import gleam/result
 import gleam/string
 import mist
+import non_empty_list
 import wisp
 import wisp/wisp_mist
 
@@ -22,9 +23,10 @@ pub fn main() {
   let priv_dir = wisp.priv_directory("backend") |> result.unwrap("priv")
   let assert Ok(credential_store) = credentials.open(priv_dir <> "/storage")
 
-  let origins =
-    envoy.get("ORIGINS") |> result.unwrap(default_origins) |> parse_origins
-  let assert [_, ..] = origins
+  let assert Ok(origins) =
+    envoy.get("ORIGINS")
+    |> result.unwrap(default_origins)
+    |> parse_origins
     as "ORIGINS must contain at least one non-empty origin"
 
   let ctx =
@@ -49,9 +51,12 @@ pub fn main() {
   process.sleep_forever()
 }
 
-fn parse_origins(raw: String) -> List(String) {
+fn parse_origins(
+  raw: String,
+) -> Result(non_empty_list.NonEmptyList(String), Nil) {
   raw
   |> string.split(",")
   |> list.map(string.trim)
   |> list.filter(fn(value) { value != "" })
+  |> non_empty_list.from_list
 }

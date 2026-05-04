@@ -1,4 +1,5 @@
 import backend/credentials
+import non_empty_list.{type NonEmptyList}
 import wisp
 
 pub type Context {
@@ -6,7 +7,7 @@ pub type Context {
     credentials: credentials.Store,
     rp_id: String,
     rp_name: String,
-    origins: List(String),
+    origins: NonEmptyList(String),
   )
 }
 

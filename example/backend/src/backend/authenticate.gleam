@@ -8,6 +8,7 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
+import non_empty_list
 import wisp
 
 const session_cookie = "authentication"
@@ -53,15 +54,22 @@ fn begin_for_username(
   case allow_credentials_for_username(ctx, username) {
     Error(message) -> error_response(message, 404)
     Ok(allow_credentials) -> {
-      let assert [first_origin, ..rest_origins] = ctx.origins
       // User verification is preferred (the WebAuthn default) so the demo
       // works on authenticators without UV capability while still requesting
       // it when supported. Tighten to `VerificationRequired` for a deployment
       // that mandates biometric/PIN.
       let builder =
-        authentication.new(relying_party_id: ctx.rp_id, origin: first_origin)
+        authentication.new(
+          relying_party_id: ctx.rp_id,
+          origin: non_empty_list.first(ctx.origins),
+        )
         |> authentication.user_verification(glasslock.VerificationPreferred)
-      let builder = list.fold(rest_origins, builder, authentication.origin)
+      let builder =
+        list.fold(
+          non_empty_list.rest(ctx.origins),
+          builder,
+          authentication.origin,
+        )
       let builder =
         list.fold(allow_credentials, builder, fn(b, entry) {
           let #(id, transports) = entry
