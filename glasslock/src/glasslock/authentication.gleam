@@ -499,14 +499,10 @@ pub fn verify(
   )
 
   let signed_data = bit_array.concat([authenticator_data, client_data_hash])
-  let glasslock.PublicKey(public_key_cbor) = stored.public_key
-  use #(parsed_key, alg) <- result.try(
-    wrap_error(internal.parse_public_key(public_key_cbor)),
-  )
   use _ <- result.try(
     wrap_error(internal.verify_signature(
-      parsed_key,
-      alg:,
+      glasslock.public_key_cose(stored.public_key),
+      alg: glasslock.public_key_alg(stored.public_key),
       message: signed_data,
       signature:,
     )),

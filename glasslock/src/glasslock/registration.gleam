@@ -545,7 +545,7 @@ pub fn verify(
     )),
   )
 
-  use #(attested, sign_count) <- result.try(verify_attestation(
+  use #(attested, public_key, sign_count) <- result.try(verify_attestation(
     challenge,
     raw_id,
     attestation_object,
@@ -553,7 +553,7 @@ pub fn verify(
 
   Ok(glasslock.Credential(
     id: attested.credential_id,
-    public_key: glasslock.PublicKey(attested.public_key_cbor),
+    public_key:,
     sign_count: sign_count,
     transports: list.filter_map(
       response.transports,
@@ -601,7 +601,7 @@ fn verify_attestation(
   challenge: Challenge,
   raw_id: BitArray,
   attestation_object: BitArray,
-) -> Result(#(internal.AttestedCredential, Int), Error) {
+) -> Result(#(internal.AttestedCredential, glasslock.PublicKey, Int), Error) {
   use attestation_obj <- result.try(
     wrap_error(internal.parse_attestation_object(attestation_object)),
   )
@@ -634,12 +634,13 @@ fn verify_attestation(
     )),
   )
 
-  use #(_, alg) <- result.try(
-    wrap_error(internal.parse_public_key(attested.public_key_cbor)),
+  use public_key <- result.try(
+    glasslock.parse_public_key(attested.public_key_cbor)
+    |> result.map_error(public_key_error),
   )
   use <- bool.guard(
     when: !list.any(challenge.algorithms, fn(a) {
-      algorithm_to_signature_alg(a) == alg
+      algorithm_to_signature_alg(a) == glasslock.public_key_alg(public_key)
     }),
     return: Error(UnsupportedKey(
       "credential algorithm does not match requested algorithms",
@@ -653,7 +654,7 @@ fn verify_attestation(
     )),
   )
 
-  Ok(#(attested, auth_data.sign_count))
+  Ok(#(attested, public_key, auth_data.sign_count))
 }
 
 /// Convenience wrapper around [`verify`](#verify) for callers whose response
@@ -678,4 +679,11 @@ fn wrap_error(result: Result(a, internal.Error)) -> Result(a, Error) {
       internal.SignatureVerificationFailed -> InvalidSignature
     }
   })
+}
+
+fn public_key_error(error: glasslock.PublicKeyError) -> Error {
+  case error {
+    glasslock.InvalidPublicKey(reason) -> ParseError(reason)
+    glasslock.UnsupportedPublicKey(reason) -> UnsupportedKey(reason)
+  }
 }

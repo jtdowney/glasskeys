@@ -8,6 +8,73 @@ import gleam/string
 import trove
 import trove/codec
 
+type StoredUser {
+  StoredUser(
+    username: String,
+    user_id: BitArray,
+    credentials: List(StoredCredential),
+  )
+}
+
+type StoredCredential {
+  StoredCredential(
+    id: BitArray,
+    public_key_bytes: BitArray,
+    sign_count: Int,
+    transports: List(glasslock.Transport),
+  )
+}
+
+fn to_stored(user: User) -> StoredUser {
+  StoredUser(
+    username: user.username,
+    user_id: user.user_id,
+    credentials: list.map(user.credentials, to_stored_credential),
+  )
+}
+
+fn to_stored_credential(credential: glasslock.Credential) -> StoredCredential {
+  StoredCredential(
+    id: credential.id,
+    public_key_bytes: glasslock.encode_public_key(credential.public_key),
+    sign_count: credential.sign_count,
+    transports: credential.transports,
+  )
+}
+
+fn from_stored(stored: StoredUser) -> Result(User, Nil) {
+  use credentials <- result.try(list.try_map(
+    stored.credentials,
+    from_stored_credential,
+  ))
+  Ok(User(username: stored.username, user_id: stored.user_id, credentials:))
+}
+
+fn from_stored_credential(
+  stored: StoredCredential,
+) -> Result(glasslock.Credential, Nil) {
+  glasslock.parse_public_key(stored.public_key_bytes)
+  |> result.replace_error(Nil)
+  |> result.map(fn(public_key) {
+    glasslock.Credential(
+      id: stored.id,
+      public_key:,
+      sign_count: stored.sign_count,
+      transports: stored.transports,
+    )
+  })
+}
+
+fn user_codec() -> codec.Codec(User) {
+  codec.Codec(
+    encode: fn(user) { term_encode(to_stored(user)) },
+    decode: fn(bits) {
+      use stored <- result.try(term_decode(bits))
+      from_stored(stored)
+    },
+  )
+}
+
 pub type Store {
   Store(
     db: trove.Db(String, String),
@@ -44,7 +111,7 @@ pub fn open(storage_path: String) -> Result(Store, trove.OpenError) {
       db,
       name: "users",
       key_codec: codec.string(),
-      value_codec: term_codec(),
+      value_codec: user_codec(),
       key_compare: string.compare,
     )
   let credential_index =
@@ -181,10 +248,6 @@ fn replace_credential(
       False -> cred
     }
   })
-}
-
-fn term_codec() -> codec.Codec(a) {
-  codec.Codec(encode: term_encode, decode: term_decode)
 }
 
 @external(erlang, "backend_ffi", "term_encode")

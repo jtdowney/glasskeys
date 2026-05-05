@@ -343,10 +343,11 @@ pub fn generate_rs256_keypair() -> KeyPair {
   KeyPair(key:, alg:)
 }
 
-/// Get the public key in COSE CBOR format.
-/// This is the format stored in `Credential.public_key`.
+/// Get the public key as a parsed `glasslock.PublicKey`.
+/// Use to construct a stored `Credential` in tests.
 pub fn public_key(keypair: KeyPair) -> glasslock.PublicKey {
-  glasslock.PublicKey(cose_key(keypair))
+  let assert Ok(public_key) = glasslock.parse_public_key(cose_key(keypair))
+  public_key
 }
 
 /// Sign a message using the algorithm stamped on the keypair.

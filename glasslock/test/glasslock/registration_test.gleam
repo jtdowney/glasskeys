@@ -175,7 +175,7 @@ pub fn verify_valid_registration_test() {
   let assert Ok(cred) = registration.verify_json(response_json:, challenge:)
   assert cred.id == response.credential_id
   assert cred.sign_count == 0
-  let glasslock.PublicKey(raw_public_key) = cred.public_key
+  let raw_public_key = glasslock.encode_public_key(cred.public_key)
   assert bit_array.byte_size(raw_public_key) > 0
 }
 

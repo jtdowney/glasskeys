@@ -316,27 +316,6 @@ pub fn parse_client_data(data: BitArray) -> Result(ClientData, Error) {
   })
 }
 
-pub fn parse_public_key(
-  cbor_bytes: BitArray,
-) -> Result(#(cose.Key, gose.DigitalSignatureAlg), Error) {
-  use parsed_key <- result.try(
-    cose.key_from_cbor(cbor_bytes)
-    |> result.map_error(map_gose_error),
-  )
-  use sig_alg <- result.try(extract_signature_alg(parsed_key))
-  Ok(#(parsed_key, sig_alg))
-}
-
-fn extract_signature_alg(
-  key: cose.Key,
-) -> Result(gose.DigitalSignatureAlg, Error) {
-  case gose.alg(key) {
-    Ok(gose.SigningAlg(gose.DigitalSignature(sig_alg))) -> Ok(sig_alg)
-    Ok(_) -> Error(UnsupportedKey("key algorithm is not a signature algorithm"))
-    Error(_) -> Error(UnsupportedKey("COSE key missing algorithm (label 3)"))
-  }
-}
-
 pub fn verify_signature(
   key: cose.Key,
   alg alg: gose.DigitalSignatureAlg,

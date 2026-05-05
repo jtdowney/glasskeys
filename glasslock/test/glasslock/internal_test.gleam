@@ -21,9 +21,9 @@ pub fn sign_verify_round_trip_test() {
 
   list.each(generators, fn(generate) {
     let keypair = generate()
-    let glasslock.PublicKey(public_key_cbor) = testing.public_key(keypair)
-    let assert Ok(#(parsed_key, alg)) =
-      internal.parse_public_key(public_key_cbor)
+    let public_key = testing.public_key(keypair)
+    let parsed_key = glasslock.public_key_cose(public_key)
+    let alg = glasslock.public_key_alg(public_key)
     use message <- qcheck.run(
       config,
       qcheck.fixed_size_byte_aligned_bit_array(64),
@@ -102,84 +102,6 @@ pub fn parse_registration_auth_data_missing_credential_test() {
     == Error(internal.ParseError("No attested credential in registration"))
 }
 
-pub fn cose_key_roundtrip_test() {
-  let generators = [
-    testing.generate_es256_keypair,
-    testing.generate_ed25519_keypair,
-    testing.generate_rs256_keypair,
-  ]
-
-  list.each(generators, fn(generate) {
-    let keypair = generate()
-    let cose_bytes = testing.cose_key(keypair)
-    let assert Ok(_key) = internal.parse_public_key(cose_bytes)
-  })
-}
-
-pub fn parse_public_key_rejects_invalid_cbor_test() {
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(<<0xFF, 0xFF, 0xFF>>)
-}
-
-pub fn parse_public_key_rejects_non_map_cbor_test() {
-  let cbor_bytes = cbor.encode(cbor.String("not a map"))
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_unsupported_key_type_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(99)),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-2), cbor.Bytes(<<0:256>>)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  assert internal.parse_public_key(cbor_bytes)
-    == Error(internal.ParseError("unsupported COSE key type: 99"))
-}
-
-pub fn parse_public_key_rejects_unsupported_curve_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(2)),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(99)),
-      #(cbor.Int(-2), cbor.Bytes(<<0:256>>)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_invalid_coordinates_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(2)),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-2), cbor.Bytes(<<0:128>>)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_missing_alg_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(4)),
-      #(cbor.Int(-1), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  assert internal.parse_public_key(cbor_bytes)
-    == Error(internal.UnsupportedKey("COSE key missing algorithm (label 3)"))
-}
-
 pub fn parse_authentication_auth_data_ignores_extensions_test() {
   let assert Ok(rp_id_hash) =
     crypto.hash(hash.Sha256, bit_array.from_string("example.com"))
@@ -242,7 +164,7 @@ pub fn parse_registration_auth_data_ignores_extensions_test() {
   assert ad.attested_credential.credential_id == credential_id
 
   let assert Ok(_) =
-    internal.parse_public_key(ad.attested_credential.public_key_cbor)
+    glasslock.parse_public_key(ad.attested_credential.public_key_cbor)
 }
 
 pub fn verify_client_data_rejects_empty_origins_test() {
@@ -311,73 +233,6 @@ pub fn verify_user_policies_rejects_user_not_present_test() {
       glasslock.VerificationDiscouraged,
     )
     == Error(internal.UserPresenceFailed)
-}
-
-pub fn parse_public_key_rejects_missing_kty_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-2), cbor.Bytes(<<0:256>>)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_missing_x_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(2)),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_missing_y_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(2)),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-2), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_non_integer_kty_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.String("EC")),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-2), cbor.Bytes(<<0:256>>)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
-}
-
-pub fn parse_public_key_rejects_non_bytes_x_test() {
-  let cose_map =
-    cbor.Map([
-      #(cbor.Int(1), cbor.Int(2)),
-      #(cbor.Int(3), cbor.Int(-7)),
-      #(cbor.Int(-1), cbor.Int(1)),
-      #(cbor.Int(-2), cbor.Int(42)),
-      #(cbor.Int(-3), cbor.Bytes(<<0:256>>)),
-    ])
-  let cbor_bytes = cbor.encode(cose_map)
-  let assert Error(internal.ParseError(_)) =
-    internal.parse_public_key(cbor_bytes)
 }
 
 pub fn parse_authentication_auth_data_rejects_truncated_data_test() {

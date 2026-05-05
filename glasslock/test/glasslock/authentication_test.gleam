@@ -531,18 +531,7 @@ pub fn verify_rejects_top_level_id_mismatched_with_raw_id_test() {
     == Error(authentication.VerificationMismatch(glasslock.CredentialIdField))
 }
 
-pub fn verify_rejects_unsupported_stored_public_key_test() {
-  let #(challenge, stored_credential, keypair) = setup_authentication()
-
-  let response =
-    testing.build_authentication_response(challenge:, keypair:, sign_count: 1)
-  let response_json =
-    testing.to_authentication_json(
-      response,
-      credential_id: stored_credential.id,
-      user_handle: option.None,
-    )
-
+pub fn parse_public_key_rejects_unsupported_algorithm_test() {
   let unsupported_key_cbor =
     cbor.encode(
       cbor.Map([
@@ -550,20 +539,8 @@ pub fn verify_rejects_unsupported_stored_public_key_test() {
         #(cbor.Int(-1), cbor.Bytes(<<0:256>>)),
       ]),
     )
-  let stored_with_unsupported_key =
-    glasslock.Credential(
-      ..stored_credential,
-      public_key: glasslock.PublicKey(unsupported_key_cbor),
-    )
-
-  let result =
-    authentication.verify_json(
-      response_json:,
-      challenge:,
-      stored: stored_with_unsupported_key,
-    )
-  assert result
-    == Error(authentication.UnsupportedKey(
+  assert glasslock.parse_public_key(unsupported_key_cbor)
+    == Error(glasslock.UnsupportedPublicKey(
       "COSE key missing algorithm (label 3)",
     ))
 }
