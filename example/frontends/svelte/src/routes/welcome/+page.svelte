@@ -1,16 +1,7 @@
 <script>
   import { goto } from "$app/navigation";
 
-  let username = $state("");
-
-  $effect(() => {
-    const stored = sessionStorage.getItem("username");
-    if (!stored) {
-      goto("/");
-      return;
-    }
-    username = stored;
-  });
+  let { data } = $props();
 
   function logout() {
     sessionStorage.removeItem("username");
@@ -22,8 +13,6 @@
   <title>Welcome · Glasskey</title>
 </svelte:head>
 
-{#if username}
-  <h1>Welcome, {username}!</h1>
-  <p>You have successfully authenticated.</p>
-  <button type="button" class="button" onclick={logout}>Log out</button>
-{/if}
+<h1>Welcome, {data.username}!</h1>
+<p>You have successfully authenticated.</p>
+<button type="button" class="button" onclick={logout}>Log out</button>
