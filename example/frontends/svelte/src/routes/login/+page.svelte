@@ -9,6 +9,9 @@
   let username = $state("");
 
   function finishLogin(username) {
+    // Demo-only: stored so /welcome can render the name. The real session is
+    // the signed cookie set by /api/login/complete; do not rely on this value
+    // as an auth signal in production code.
     sessionStorage.setItem("username", username);
     goto(resolve("/welcome"));
   }

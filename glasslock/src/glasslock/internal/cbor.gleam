@@ -1,5 +1,12 @@
 //// Minimal CBOR codec: ints, bytes, strings, maps. Covers only the
 //// subset WebAuthn attestation and COSE keys need.
+////
+//// Unsupported by design:
+//// - Arrays (major type 4)
+//// - Tagged values (major type 6)
+//// - Floats and simple values (major type 7, including `null`/`true`/`false`)
+//// - Indefinite-length items
+//// - Integers whose magnitude exceeds the 53-bit JS-safe range
 
 import gleam/bit_array
 import gleam/int
