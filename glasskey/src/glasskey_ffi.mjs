@@ -122,12 +122,16 @@ export async function getCredential(opts) {
 // Not async: must return the [promise, abort] tuple synchronously so the
 // caller receives the abort handle before the ceremony resolves.
 export function getConditionalCredential(opts) {
-  const controller = new AbortController();
-  const publicKey = buildPublicKey(opts);
-  return [
-    runConditionalGet(publicKey, controller.signal),
-    () => controller.abort(),
-  ];
+  try {
+    const controller = new AbortController();
+    const publicKey = buildPublicKey(opts);
+    return [
+      runConditionalGet(publicKey, controller.signal),
+      () => controller.abort(),
+    ];
+  } catch (error) {
+    return [Promise.resolve(Result$Error(classifyJsError(error))), () => {}];
+  }
 }
 
 async function runConditionalGet(publicKey, signal) {
