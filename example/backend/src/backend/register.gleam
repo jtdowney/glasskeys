@@ -68,6 +68,14 @@ fn begin_registration(
 
       // Resident key is required so the credential lives on the authenticator
       // and the demo can exercise the discoverable (passkey) sign-in flow.
+      //
+      // `registration.exclude_credential` isn't called here: this demo keys
+      // uniqueness on username and rejects duplicates above, so we never
+      // reach the registration ceremony for an existing user. Apps that let
+      // one user enroll multiple passkeys should pass each stored
+      // credential's id and transports here so the browser refuses to
+      // re-enroll an authenticator the user already registered, forcing
+      // them to pick a different one.
       let builder =
         registration.new(
           relying_party: registration.RelyingParty(
