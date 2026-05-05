@@ -21,6 +21,10 @@
         finishLogin(who);
       } catch (err) {
         if (cancelled) return;
+        if (err?.name === "AbortError" || err?.name === "NotAllowedError") {
+          return;
+        }
+
         status = `Error: ${err.message ?? err}`;
       }
     })();
