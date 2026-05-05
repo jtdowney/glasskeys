@@ -127,6 +127,7 @@ pub fn classify_dom_exception(name: String, message: String) -> Error {
     "NotAllowedError" -> NotAllowed
     "AbortError" -> Aborted
     "SecurityError" -> SecurityError
+    "InvalidStateError" -> InvalidState
     _ -> UnknownError(name <> ": " <> message)
   }
 }
@@ -159,8 +160,13 @@ pub type Error {
   NotAllowed
   /// The operation was aborted.
   Aborted
-  /// Security policy violation (e.g., non-HTTPS origin or invalid relying party ID for this origin).
+  /// Security policy violation (e.g., non-HTTPS origin or invalid
+  /// relying party ID for this origin).
   SecurityError
+  /// The operation conflicted with the authenticator's state, most
+  /// commonly because a credential the authenticator can satisfy is
+  /// already registered (matched by `excludeCredentials`).
+  InvalidState
   /// An unexpected error from the browser API.
   UnknownError(String)
 }

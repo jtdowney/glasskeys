@@ -859,6 +859,21 @@ pub fn start_registration_classifies_security_error_test() {
   promise.resolve(Nil)
 }
 
+pub fn start_registration_classifies_invalid_state_error_test() {
+  use <- with_fake_navigator
+  helpers.set_create_dom_exception(
+    name: "InvalidStateError",
+    message: "already registered",
+  )
+
+  use result <- promise.await(
+    glasskey.start_registration(default_registration_options()),
+  )
+
+  assert result == Error(glasskey.InvalidState)
+  promise.resolve(Nil)
+}
+
 pub fn start_registration_unknown_dom_exception_includes_name_and_message_test() {
   use <- with_fake_navigator
   helpers.set_create_dom_exception(name: "WeirdError", message: "oops")
@@ -1143,6 +1158,21 @@ pub fn start_authentication_classifies_abort_error_test() {
   )
 
   assert result == Error(glasskey.Aborted)
+  promise.resolve(Nil)
+}
+
+pub fn start_authentication_classifies_invalid_state_error_test() {
+  use <- with_fake_navigator
+  helpers.set_get_dom_exception(
+    name: "InvalidStateError",
+    message: "already registered",
+  )
+
+  use result <- promise.await(
+    glasskey.start_authentication(default_authentication_options()),
+  )
+
+  assert result == Error(glasskey.InvalidState)
   promise.resolve(Nil)
 }
 
