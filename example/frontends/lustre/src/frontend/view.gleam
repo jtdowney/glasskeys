@@ -13,7 +13,7 @@ pub fn root(m: model.Model) -> Element(model.Msg) {
       model.Unauthenticated(page: model.LoginPage(state:, username:)) ->
         login(state, username)
       model.Unauthenticated(page: model.NotFoundPage(uri:)) -> not_found(uri)
-      model.Registering(state:) -> register(state)
+      model.Registering(username:, phase:) -> register(username, phase)
       model.Authenticated(username:) -> welcome(username)
     },
   ])
@@ -45,7 +45,7 @@ fn login(state: model.LoginState, username: String) -> Element(model.Msg) {
     html.form(
       [
         attribute.class("stack"),
-        event.on_submit(fn(_) { model.LoginMsg(model.UserClickedLogin) }),
+        event.on_submit(fn(_) { model.UserClickedLogin }),
       ],
       [
         // The `webauthn` autocomplete token anchors browser passkey autofill
@@ -58,9 +58,7 @@ fn login(state: model.LoginState, username: String) -> Element(model.Msg) {
           attribute.attribute("autocomplete", "username webauthn"),
           attribute.value(username),
           attribute.disabled(loading),
-          event.on_input(fn(text) {
-            model.LoginMsg(model.UserTypedLoginUsername(text))
-          }),
+          event.on_input(model.UserTypedLoginUsername),
         ]),
         html.button([attribute.disabled(loading)], [
           html.text("Sign in with passkey"),
@@ -76,7 +74,7 @@ fn is_login_loading(state: model.LoginState) -> Bool {
   case state {
     model.LoginCheckingAutofill -> False
     model.LoginSettingUpConditional -> False
-    model.LoginConditional(..) -> False
+    model.LoginConditional -> False
     model.LoginReady(..) -> False
     model.LoginModalBeginning -> True
     model.LoginModalAwaiting -> True
@@ -91,9 +89,11 @@ fn login_status(state: model.LoginState) -> String {
   }
 }
 
-fn register(state: model.RegisterState) -> Element(model.Msg) {
-  let loading = is_register_loading(state)
-  let username = model.register_username(state)
+fn register(
+  username: String,
+  phase: model.RegisterPhase,
+) -> Element(model.Msg) {
+  let loading = is_register_loading(phase)
   html.div([], [
     html.h1([], [html.text("Register")]),
     html.div([attribute.class("stack")], [
@@ -102,41 +102,37 @@ fn register(state: model.RegisterState) -> Element(model.Msg) {
         attribute.placeholder("Username"),
         attribute.value(username),
         attribute.disabled(loading),
-        event.on_input(fn(text) {
-          model.RegisterMsg(
-            model.RegisterIdleAction(model.UserTypedUsername(text)),
-          )
-        }),
+        event.on_input(model.UserTypedRegisterUsername),
       ]),
       html.button(
         [
-          event.on_click(
-            model.RegisterMsg(model.RegisterIdleAction(
-              model.UserClickedRegister,
-            )),
-          ),
+          event.on_click(model.UserClickedRegister),
           attribute.disabled(loading || username == ""),
         ],
         [html.text("Register")],
       ),
     ]),
-    status(register_status(state)),
+    status(register_status(phase)),
     back_link(),
   ])
 }
 
-fn is_register_loading(state: model.RegisterState) -> Bool {
-  case state {
+fn is_register_loading(phase: model.RegisterPhase) -> Bool {
+  case phase {
     model.RegisterIdle(..) -> False
-    model.RegisterBeginning(..) -> True
-    model.RegisterAwaitingAuthenticator(..) -> True
-    model.RegisterVerifying(..) -> True
+    model.RegisterBeginning -> True
+    model.RegisterAwaitingAuthenticator -> True
+    model.RegisterVerifying -> True
   }
 }
 
-fn register_status(state: model.RegisterState) -> String {
-  case state {
-    model.RegisterIdle(status:, ..) -> status
+fn register_status(phase: model.RegisterPhase) -> String {
+  case phase {
+    model.RegisterIdle(status: model.RegisterStart) -> ""
+    model.RegisterIdle(status: model.RegisterSucceeded) ->
+      "Registration successful!"
+    model.RegisterIdle(status: model.RegisterFailed(message)) ->
+      "Error: " <> message
     _ -> ""
   }
 }
