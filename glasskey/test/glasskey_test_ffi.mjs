@@ -1,15 +1,15 @@
 import {
-  BitArray$BitArray,
-  Result$Ok,
-  Result$Error,
-  toList,
-} from "./gleam.mjs";
-import {
   Option$Some,
   Option$None,
   Option$isSome,
   Option$Some$0,
 } from "../gleam_stdlib/gleam/option.mjs";
+import {
+  BitArray$BitArray,
+  Result$Ok,
+  Result$Error,
+  toList,
+} from "./gleam.mjs";
 import {
   CreateSnapshot$CreateSnapshot,
   GetSnapshot$GetSnapshot,
@@ -147,7 +147,9 @@ export function installFakeNavigatorWithoutCredentials() {
 }
 
 export function uninstallFakeNavigator() {
-  if (originalState === null) return;
+  if (originalState === null) {
+    return;
+  }
   restoreGlobal("window", originalState.window);
   restoreGlobal("navigator", originalState.navigator);
   restoreGlobal("PublicKeyCredential", originalState.PublicKeyCredential);
@@ -259,10 +261,12 @@ export function setPlatformAuthenticatorAvailable(available) {
 }
 
 function challengeBitArray(value) {
-  if (value instanceof ArrayBuffer)
+  if (value instanceof ArrayBuffer) {
     return BitArray$BitArray(new Uint8Array(value));
-  if (ArrayBuffer.isView(value))
+  }
+  if (ArrayBuffer.isView(value)) {
     return BitArray$BitArray(new Uint8Array(value.buffer));
+  }
   throw new Error("fake navigator: challenge was not a buffer");
 }
 
@@ -281,7 +285,9 @@ function descriptorTransportsList(descriptors) {
 }
 
 export function lastCreateSnapshot() {
-  if (lastCreateOptions === null) return Result$Error(undefined);
+  if (lastCreateOptions === null) {
+    return Result$Error(undefined);
+  }
   const pk = lastCreateOptions;
   return Result$Ok(
     CreateSnapshot$CreateSnapshot(
@@ -300,7 +306,9 @@ export function lastCreateSnapshot() {
 }
 
 export function lastGetSnapshot() {
-  if (lastGetOptions === null) return Result$Error(undefined);
+  if (lastGetOptions === null) {
+    return Result$Error(undefined);
+  }
   const pk = lastGetOptions;
   return Result$Ok(
     GetSnapshot$GetSnapshot(
@@ -314,6 +322,8 @@ export function lastGetSnapshot() {
 }
 
 export function lastGetSignalAborted() {
-  if (lastGetSignal === null) return Result$Error(undefined);
+  if (lastGetSignal === null) {
+    return Result$Error(undefined);
+  }
   return Result$Ok(lastGetSignal.aborted === true);
 }

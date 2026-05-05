@@ -1,6 +1,15 @@
 repos:
-  - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.8.3
+  - repo: local
     hooks:
       - id: prettier
-        files: \.(js|svelte|css|html|json)$
+        name: prettier --check
+        entry: bun run format:check
+        language: system
+        files: ^src/.*\.*$
+        pass_filenames: false
+      - id: eslint
+        name: eslint
+        entry: bun run lint
+        language: system
+        files: ^src/.*\.mjs$
+        pass_filenames: false

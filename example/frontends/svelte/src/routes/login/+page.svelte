@@ -1,5 +1,6 @@
 <script>
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { WebAuthnAbortService } from "@simplewebauthn/browser";
   import { login, loginWithAutofill } from "$lib/api.js";
 
@@ -9,7 +10,7 @@
 
   function finishLogin(username) {
     sessionStorage.setItem("username", username);
-    goto("/welcome");
+    goto(resolve("/welcome"));
   }
 
   $effect(() => {
@@ -17,10 +18,14 @@
     (async () => {
       try {
         const who = await loginWithAutofill();
-        if (cancelled || !who) return;
+        if (cancelled || !who) {
+          return;
+        }
         finishLogin(who);
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         if (err?.name === "AbortError" || err?.name === "NotAllowedError") {
           return;
         }
@@ -72,4 +77,4 @@
 {#if status}
   <p class="status">{status}</p>
 {/if}
-<p><a href="/">Back to home</a></p>
+<p><a href={resolve("/")}>Back to home</a></p>

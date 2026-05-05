@@ -1,11 +1,12 @@
 <script>
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
 
   let { data } = $props();
 
   function logout() {
     sessionStorage.removeItem("username");
-    goto("/");
+    goto(resolve("/"));
   }
 </script>
 

@@ -21,7 +21,9 @@ async function completeLogin(response) {
   const { verified, username } = await postJson("/api/login/complete", {
     response,
   });
-  if (!verified) throw new Error("authentication not verified");
+  if (!verified) {
+    throw new Error("authentication not verified");
+  }
   return username;
 }
 
@@ -29,7 +31,9 @@ export async function register(username) {
   const { options } = await postJson("/api/register/begin", { username });
   const response = await startRegistration({ optionsJSON: options });
   const { verified } = await postJson("/api/register/complete", { response });
-  if (!verified) throw new Error("registration not verified");
+  if (!verified) {
+    throw new Error("registration not verified");
+  }
 }
 
 export async function login(username = "") {
@@ -39,7 +43,9 @@ export async function login(username = "") {
 }
 
 export async function loginWithAutofill() {
-  if (!(await browserSupportsWebAuthnAutofill())) return null;
+  if (!(await browserSupportsWebAuthnAutofill())) {
+    return null;
+  }
   const { options } = await postJson("/api/login/begin", { username: "" });
   const response = await startAuthentication({
     optionsJSON: options,

@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from "$app/paths";
   import { register } from "$lib/api.js";
 
   let username = $state("");
@@ -7,7 +8,9 @@
   const canSubmit = $derived(username.trim() !== "" && !busy);
 
   async function handleRegister() {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      return;
+    }
     busy = true;
     status = "Starting registration...";
     try {
@@ -41,4 +44,4 @@
 {#if status}
   <p class="status">{status}</p>
 {/if}
-<p><a href="/">Back to home</a></p>
+<p><a href={resolve("/")}>Back to home</a></p>
