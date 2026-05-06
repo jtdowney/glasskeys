@@ -144,7 +144,8 @@ pub type AuthenticatorAttachment {
 ///
 /// Contains the promise that resolves when the user selects a passkey
 /// from the browser's autofill UI, and an abort function to cancel
-/// the pending ceremony.
+/// the pending ceremony. After calling `abort()`, `result` resolves to
+/// `Error(Aborted)`.
 pub type ConditionalAuthentication {
   ConditionalAuthentication(
     result: Promise(Result(Json, Error)),
@@ -224,7 +225,9 @@ pub type Requirement {
   Required
   /// The operation should satisfy this requirement if possible.
   Preferred
-  /// The operation should not satisfy this requirement.
+  /// The operation should not satisfy this requirement. Common for
+  /// `resident_key`; unusual for `user_verification` (drops UV to
+  /// presence-only).
   Discouraged
 }
 
@@ -295,13 +298,9 @@ pub fn start_authentication(
 /// Returns synchronously with the ceremony handle or an error. Call `abort`
 /// before starting a modal ceremony or when navigating away.
 ///
-/// Conditional mediation is a separate browser capability from WebAuthn
-/// itself. Callers should check
-/// [`supports_webauthn_autofill`](#supports_webauthn_autofill) before
-/// invoking this function. The synchronous `supports_webauthn` guard inside
-/// only catches the absence of WebAuthn entirely; if WebAuthn is present
-/// but conditional mediation is not, the returned `result` promise will
-/// resolve to `Error(NotSupported)` rather than failing synchronously.
+/// Check [`supports_webauthn_autofill`](#supports_webauthn_autofill) before
+/// calling. If WebAuthn is present but conditional mediation is not, `result`
+/// resolves to `Error(NotSupported)` instead of failing synchronously.
 pub fn start_conditional_authentication(
   options: AuthenticationOptions,
 ) -> Result(ConditionalAuthentication, Error) {

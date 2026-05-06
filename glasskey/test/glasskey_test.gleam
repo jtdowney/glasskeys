@@ -1239,7 +1239,7 @@ pub fn start_authentication_passes_options_to_navigator_test() {
   promise.resolve(Nil)
 }
 
-pub fn start_authentication_omits_user_verification_when_none_test() {
+pub fn start_authentication_omits_optional_fields_when_none_test() {
   use <- with_fake_navigator
   helpers.set_get_credential(
     raw_id: <<>>,
@@ -1259,6 +1259,8 @@ pub fn start_authentication_omits_user_verification_when_none_test() {
   let assert Ok(snapshot) = helpers.last_get_snapshot()
 
   assert snapshot.user_verification == option.None
+  assert snapshot.timeout == option.None
+  assert snapshot.rp_id == option.Some("example.com")
 
   promise.resolve(Nil)
 }
@@ -1316,6 +1318,18 @@ pub fn start_conditional_authentication_abort_signals_navigator_test() {
   use _ <- promise.await(handle.result)
 
   assert helpers.last_get_signal_aborted() == Ok(True)
+  promise.resolve(Nil)
+}
+
+pub fn start_conditional_authentication_classifies_abort_test() {
+  use <- with_fake_navigator
+  helpers.set_get_dom_exception(name: "AbortError", message: "boom")
+
+  let assert Ok(handle) =
+    glasskey.start_conditional_authentication(default_authentication_options())
+  use result <- promise.await(handle.result)
+
+  assert result == Error(glasskey.Aborted)
   promise.resolve(Nil)
 }
 
