@@ -124,7 +124,8 @@ pub opaque type Builder {
   )
 }
 
-/// A finalized authentication challenge ready for verification.
+/// A finalized authentication challenge ready for verification or
+/// out-of-process serialization (see `encode_challenge`).
 pub opaque type Challenge {
   Challenge(
     data: internal.ChallengeData,
