@@ -1,3 +1,7 @@
+//// `/api/register/begin` and `/api/register/complete` handlers. Persists the
+//// pending challenge in a signed-cookie session and delegates verification
+//// to `glasslock/registration`.
+
 import backend/credentials
 import backend/web
 import glasslock

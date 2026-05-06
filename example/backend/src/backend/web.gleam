@@ -1,3 +1,6 @@
+//// Shared `Context` (credential store, RP id/name, allowed origins) and the
+//// request-logging plus crash-rescue middleware used by every handler.
+
 import backend/credentials
 import non_empty_list.{type NonEmptyList}
 import wisp

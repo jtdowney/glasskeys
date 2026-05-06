@@ -1,3 +1,6 @@
+//// Mist server entry point: env-driven config, credential store setup, and
+//// HTTP listener on port 3000.
+
 import backend/credentials
 import backend/router
 import backend/web
