@@ -1,5 +1,5 @@
 ---
-version: 1.5.5
+version: 2.0.0
 title: glasslock registration.request emits compat JSON
 file: ./test/glasslock/registration_test.gleam
 test_name: request_emits_compat_json_test

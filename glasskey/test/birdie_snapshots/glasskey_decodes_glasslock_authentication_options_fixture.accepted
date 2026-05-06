@@ -1,5 +1,5 @@
 ---
-version: 1.5.5
+version: 2.0.0
 title: glasskey decodes glasslock authentication options fixture
 file: ./test/glasskey_test.gleam
 test_name: decodes_glasslock_authentication_options_test
