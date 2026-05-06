@@ -60,7 +60,7 @@ fn apply_route(
   m: model.Model,
   route: router.Route,
 ) -> #(model.Model, Effect(model.Msg)) {
-  let abort_eff = abort_if_conditional(m)
+  let abort_eff = abort_in_flight_conditional(m)
   let #(next, route_eff) = case route {
     router.Home -> #(model.Unauthenticated(page: model.HomePage), effect.none())
     router.Register -> #(
@@ -86,7 +86,7 @@ fn apply_route(
   #(next, effect.batch([abort_eff, route_eff]))
 }
 
-fn abort_if_conditional(m: model.Model) -> Effect(model.Msg) {
+fn abort_in_flight_conditional(m: model.Model) -> Effect(model.Msg) {
   case m {
     model.Unauthenticated(page: model.LoginPage(
       state: model.LoginConditional,

@@ -2,6 +2,7 @@
 
 import glasslock
 import gleam/bit_array
+import gleam/bool
 import gleam/list
 import gleam/result
 import gleam/string
@@ -65,6 +66,8 @@ fn from_stored_credential(
   })
 }
 
+// term_to_binary round-trips nested records (User -> Credential ->
+// AuthenticatorTransport) without per-field encoders.
 fn user_codec() -> codec.Codec(User) {
   codec.Codec(
     encode: fn(user) { term_encode(to_stored(user)) },
@@ -184,9 +187,22 @@ pub fn save(
   let uid_key = bit_array.base64_url_encode(user_id, False)
 
   trove.transaction(store.db, timeout: trove_timeout, callback: fn(tx) {
-    use <- guard_unique(tx, store.users, username, UsernameTaken)
-    use <- guard_unique(tx, store.credential_index, cred_key, CredentialIdTaken)
-    use <- guard_unique(tx, store.user_id_index, uid_key, UserIdTaken)
+    use <- bool.guard(
+      when: trove.tx_has_key_in(tx, keyspace: store.users, key: username),
+      return: trove.Cancel(result: Error(UsernameTaken)),
+    )
+    use <- bool.guard(
+      when: trove.tx_has_key_in(
+        tx,
+        keyspace: store.credential_index,
+        key: cred_key,
+      ),
+      return: trove.Cancel(result: Error(CredentialIdTaken)),
+    )
+    use <- bool.guard(
+      when: trove.tx_has_key_in(tx, keyspace: store.user_id_index, key: uid_key),
+      return: trove.Cancel(result: Error(UserIdTaken)),
+    )
 
     let tx =
       tx
@@ -207,20 +223,6 @@ pub fn save(
       )
     trove.Commit(tx: tx, result: Ok(Nil))
   })
-}
-
-fn guard_unique(
-  tx: trove.Tx(String, String),
-  keyspace: trove.Keyspace(String, v),
-  key: String,
-  conflict: SaveError,
-  proceed: fn() ->
-    trove.TransactionResult(String, String, Result(Nil, SaveError)),
-) -> trove.TransactionResult(String, String, Result(Nil, SaveError)) {
-  case trove.tx_has_key_in(tx, keyspace:, key:) {
-    True -> trove.Cancel(result: Error(conflict))
-    False -> proceed()
-  }
 }
 
 pub fn update(

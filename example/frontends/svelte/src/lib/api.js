@@ -10,11 +10,11 @@ async function postJson(path, body) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error ?? `request failed: ${res.status}`);
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `request failed: ${res.status}`);
   }
-  return data;
+  return res.json();
 }
 
 async function completeLogin(response) {

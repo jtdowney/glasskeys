@@ -18,6 +18,8 @@ import wisp
 
 const session_cookie = "registration"
 
+// Five-minute lifetime for the pending-ceremony cookie. Bounds how long a
+// half-completed registration can sit before the user must restart.
 const session_max_age = 300
 
 type PendingRegistration {
@@ -37,10 +39,10 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case json.parse(body, decoder) {
-    Error(_) -> error_response("invalid json", 400)
+    Error(_) -> web.error_response("invalid json", 400)
     Ok(username) ->
       case string.trim(username) {
-        "" -> error_response("username required", 400)
+        "" -> web.error_response("username required", 400)
         trimmed -> begin_registration(req, trimmed, ctx)
       }
   }
@@ -55,7 +57,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case json.parse(body, decoder) {
-    Error(_) -> error_response("invalid json", 400)
+    Error(_) -> web.error_response("invalid json", 400)
     Ok(response) -> complete_registration(req, response, ctx)
   }
 }
@@ -66,8 +68,11 @@ fn begin_registration(
   ctx: web.Context,
 ) -> wisp.Response {
   case credentials.get_user(ctx.credentials, username) {
-    Ok(_) -> error_response("username already registered", 409)
+    Ok(_) -> web.error_response("username already registered", 409)
     Error(_) -> {
+      // Random opaque user handle. WebAuthn requires user.id to contain
+      // no PII so credentials can't be used to correlate accounts across
+      // relying parties.
       let user_id = crypto.strong_random_bytes(16)
 
       // Resident key is required so the credential lives on the authenticator
@@ -152,10 +157,10 @@ fn complete_registration(
       json.object([#("verified", json.bool(True))])
       |> json.to_string
       |> wisp.json_response(200)
-      |> clear_session(req)
+      |> web.clear_session(req, session_cookie)
     Error(#(message, status)) ->
-      error_response(message, status)
-      |> clear_session(req)
+      web.error_response(message, status)
+      |> web.clear_session(req, session_cookie)
   }
 }
 
@@ -165,16 +170,6 @@ fn save_error_response(error: credentials.SaveError) -> #(String, Int) {
     credentials.CredentialIdTaken -> #("credential already registered", 409)
     credentials.UserIdTaken -> #("user id already registered", 409)
   }
-}
-
-fn error_response(message: String, status: Int) -> wisp.Response {
-  json.object([#("error", json.string(message))])
-  |> json.to_string
-  |> wisp.json_response(status)
-}
-
-fn clear_session(response: wisp.Response, req: wisp.Request) -> wisp.Response {
-  wisp.set_cookie(response, req, session_cookie, "", wisp.PlainText, 0)
 }
 
 fn encode_pending(pending: PendingRegistration) -> String {

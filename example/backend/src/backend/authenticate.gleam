@@ -17,6 +17,8 @@ import wisp
 
 const session_cookie = "authentication"
 
+// Five-minute lifetime for the pending-ceremony cookie. Bounds how long a
+// half-completed login can sit before the user must restart.
 const session_max_age = 300
 
 pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
@@ -28,15 +30,7 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
       option.None,
       decode.optional(decode.string),
     )
-    decode.success(
-      option.map(username, string.trim)
-      |> option.then(fn(value) {
-        case value {
-          "" -> option.None
-          _ -> option.Some(value)
-        }
-      }),
-    )
+    decode.success(username)
   }
 
   let username_result = case string.trim(body) {
@@ -45,7 +39,7 @@ pub fn begin(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case username_result {
-    Error(_) -> error_response("invalid json", 400)
+    Error(_) -> web.error_response("invalid json", 400)
     Ok(username) -> begin_for_username(req, ctx, username)
   }
 }
@@ -56,7 +50,7 @@ fn begin_for_username(
   username: option.Option(String),
 ) -> wisp.Response {
   case allow_credentials_for_username(ctx, username) {
-    Error(message) -> error_response(message, 404)
+    Error(_) -> web.error_response("user not found", 404)
     Ok(allow_credentials) -> {
       // User verification is preferred (the WebAuthn default) so the demo
       // works on authenticators without UV capability while still requesting
@@ -100,17 +94,15 @@ fn begin_for_username(
 fn allow_credentials_for_username(
   ctx: web.Context,
   username: option.Option(String),
-) -> Result(List(#(BitArray, List(glasslock.Transport))), String) {
-  case username {
+) -> Result(List(#(BitArray, List(glasslock.Transport))), Nil) {
+  case option.map(username, string.trim) {
     option.None -> Ok([])
+    option.Some("") -> Ok([])
     option.Some(name) ->
-      case credentials.get_user(ctx.credentials, name) {
-        Ok(user) ->
-          Ok(
-            list.map(user.credentials, fn(cred) { #(cred.id, cred.transports) }),
-          )
-        Error(_) -> Error("user not found")
-      }
+      credentials.get_user(ctx.credentials, name)
+      |> result.map(fn(user) {
+        list.map(user.credentials, fn(cred) { #(cred.id, cred.transports) })
+      })
   }
 }
 
@@ -123,7 +115,7 @@ pub fn complete(req: wisp.Request, ctx: web.Context) -> wisp.Response {
   }
 
   case json.parse(body, decoder) {
-    Error(_) -> error_response("invalid json", 400)
+    Error(_) -> web.error_response("invalid json", 400)
     Ok(response) -> complete_authentication(req, response, ctx)
   }
 }
@@ -174,21 +166,11 @@ fn complete_authentication(
       ])
       |> json.to_string
       |> wisp.json_response(200)
-      |> clear_session(req)
+      |> web.clear_session(req, session_cookie)
     Error(#(message, status)) ->
-      error_response(message, status)
-      |> clear_session(req)
+      web.error_response(message, status)
+      |> web.clear_session(req, session_cookie)
   }
-}
-
-fn error_response(message: String, status: Int) -> wisp.Response {
-  json.object([#("error", json.string(message))])
-  |> json.to_string
-  |> wisp.json_response(status)
-}
-
-fn clear_session(response: wisp.Response, req: wisp.Request) -> wisp.Response {
-  wisp.set_cookie(response, req, session_cookie, "", wisp.PlainText, 0)
 }
 
 fn describe_error(err: authentication.Error) -> String {
