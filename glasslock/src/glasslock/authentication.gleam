@@ -72,9 +72,20 @@ import gleam/time/duration.{type Duration}
 import kryptos/crypto
 import kryptos/hash
 
-/// Parsed credential lookup info from response (for discoverable flow).
+/// Parsed credential lookup info from an authentication response. Use in
+/// the discoverable (usernameless) flow to find the stored credential
+/// before calling `verify`.
 pub type ResponseInfo {
-  ResponseInfo(credential_id: BitArray, user_handle: Option(BitArray))
+  ResponseInfo(
+    /// The credential ID the authenticator asserted. Look this up against
+    /// your stored credentials to find the matching record.
+    credential_id: BitArray,
+    /// The user handle the authenticator returned: the same opaque bytes
+    /// originally registered as `User.id`. `None` when the authenticator
+    /// did not return one. Required for discoverable credentials, optional
+    /// otherwise.
+    user_handle: Option(BitArray),
+  )
 }
 
 /// Errors that can occur during authentication verification.
