@@ -72,19 +72,36 @@ pub type ResidentKey {
 
 /// The Relying Party: the service using WebAuthn to register or authenticate
 /// users (i.e. your application).
-///
-/// - `id`: a valid domain string identifying the Relying Party, e.g.
-///   `"example.com"`. The browser binds credentials to this value, so it must
-///   match the effective domain of the page calling WebAuthn.
-/// - `name`: a human-readable name shown to the user by the authenticator
-///   during registration, e.g. `"My App"`.
 pub type RelyingParty {
-  RelyingParty(id: String, name: String)
+  RelyingParty(
+    /// A valid domain string identifying the Relying Party, e.g.
+    /// `"example.com"`. The browser binds credentials to this value, so it
+    /// must match the effective domain of the page calling WebAuthn.
+    id: String,
+    /// A human-readable name shown to the user by the authenticator during
+    /// registration, e.g. `"My App"`.
+    name: String,
+  )
 }
 
 /// User information for registration.
 pub type User {
-  User(id: BitArray, name: String, display_name: String)
+  User(
+    /// An opaque user handle (max 64 bytes) that uniquely identifies the
+    /// user to the authenticator. The WebAuthn spec requires this be random
+    /// bytes that are not derived from personal information (email,
+    /// username, etc.), so authenticators cannot correlate the user across
+    /// relying parties. Generate once per user (e.g.
+    /// `crypto.strong_random_bytes(16)`) and persist alongside the account.
+    id: BitArray,
+    /// A human-palatable identifier for the account, typically the login
+    /// the user enters (username or email). Shown by the authenticator
+    /// during account selection.
+    name: String,
+    /// A human-palatable name for the user (e.g. `"Jane Doe"`), intended
+    /// only for display.
+    display_name: String,
+  )
 }
 
 /// Errors that can occur during registration verification.
